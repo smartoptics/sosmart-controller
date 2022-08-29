@@ -208,7 +208,7 @@ public class PceOpticalNode implements PceNode {
                     LOG.error("initWLlist: SRG node {} is OOS/degraded", this);
                     return;
                 }
-                if (!node1.getSrgAttributes().nonnullAvailFreqMaps().containsKey(freqMapKey)) {
+                if (node1 == null || !node1.getSrgAttributes().nonnullAvailFreqMaps().containsKey(freqMapKey)) {
                     LOG.error("initFrequenciesBitSet: SRG no cband available freq maps for node  {}", this);
                     this.valid = false;
                     return;
@@ -222,7 +222,7 @@ public class PceOpticalNode implements PceNode {
                     LOG.error("initWLlist: Degree node {} is OOS/degraded", this);
                     return;
                 }
-                if (!node1.getDegreeAttributes().nonnullAvailFreqMaps().containsKey(freqMapKey)) {
+                if (node1 == null || !node1.getDegreeAttributes().nonnullAvailFreqMaps().containsKey(freqMapKey)) {
                     LOG.error("initFrequenciesBitSet: DEG no cband available freq maps for node  {}", this);
                     this.valid = false;
                     return;

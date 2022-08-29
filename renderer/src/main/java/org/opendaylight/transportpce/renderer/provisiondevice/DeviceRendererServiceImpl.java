@@ -47,6 +47,15 @@ import org.opendaylight.transportpce.common.openroadminterfaces.OpenRoadmInterfa
 import org.opendaylight.transportpce.renderer.openroadminterface.OpenRoadmInterfaceFactory;
 import org.opendaylight.transportpce.renderer.provisiondevice.servicepath.ServiceListTopology;
 import org.opendaylight.transportpce.renderer.provisiondevice.servicepath.ServicePathDirection;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.Connection;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.DeviceInterface;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.delete.DeleteService;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.delete.DeleteSubscriber;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.delete.FailedRollbackResult;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.delete.Result;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.delete.Subscriber;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.history.History;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.history.NonStickHistoryMemory;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.alarmsuppression.rev171102.ServiceNodelist;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.alarmsuppression.rev171102.service.nodelist.NodelistBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.alarmsuppression.rev171102.service.nodelist.NodelistKey;
@@ -104,12 +113,20 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
         this.portMapping = portMapping;
     }
 
+    @Override
+    public ServicePathOutput setupServicePath(ServicePathInput input,
+        ServicePathDirection direction) {
+        return setupServicePath(input, direction, new NonStickHistoryMemory());
+    }
+
     @SuppressWarnings("rawtypes")
     // FIXME check if the ForkJoinTask raw type can be avoided
     // Raw types use are discouraged since they lack type safety.
     // Resulting Problems are observed at run time and not at compile time
     @Override
-    public ServicePathOutput setupServicePath(ServicePathInput input, ServicePathDirection direction) {
+    public ServicePathOutput setupServicePath(ServicePathInput input,
+        ServicePathDirection direction,
+        History transactionHistory) {
         LOG.info("setup service path for input {} and direction {}", input, direction);
         List<Nodes> nodes = new ArrayList<>();
         if (input.getNodes() != null) {
@@ -130,6 +147,10 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
         ForkJoinTask forkJoinTask = forkJoinPool.submit(() -> nodes.parallelStream().forEach(node -> {
             String nodeId = node.getNodeId();
             LOG.info("Starting provisioning for node : {}", nodeId);
+            if (this.portMapping.getNode(nodeId).getNodeInfo().getNodeType().getIntValue() == 3) {
+                LOG.info("Node is ILA, nothing to do");
+                return;
+            }
             AEndApiInfo apiInfoA = null;
             ZEndApiInfo apiInfoZ = null;
             if (input.getAEndApiInfo() != null && input.getAEndApiInfo().getNodeId().contains(nodeId)) {
@@ -155,31 +176,47 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
                         crossConnectFlag++;
                         String supportingOchInterface = this.openRoadmInterfaceFactory.createOpenRoadmOchInterface(
                                 nodeId, destTp, spectrumInformation);
+                        transactionHistory.add(
+                            new DeviceInterface(nodeId, supportingOchInterface));
+
                         // Split the string based on # pass the last element as the supported Interface
                         // This is needed for 7.1 device models with B100G, we have OTSI, OTSI-group combined as OCH
                         String[] listOfSuppOchInf = supportingOchInterface.split("#");
                         createdOchInterfaces = Set.of(listOfSuppOchInf);
+                        transactionHistory.addInterfaces(nodeId, listOfSuppOchInf);
+
                         // Taking the last element
                         supportingOchInterface = listOfSuppOchInf[createdOchInterfaces.size() - 1];
                         String supportingOtuInterface = this.openRoadmInterfaceFactory.createOpenRoadmOtu4Interface(
                                 nodeId, destTp, supportingOchInterface, apiInfoA, apiInfoZ);
                         createdOtuInterfaces.add(supportingOtuInterface);
+                        transactionHistory.add(
+                            new DeviceInterface(nodeId, supportingOtuInterface)
+                        );
                         if (srcTp == null) {
                             otnLinkTps.add(new LinkTpBuilder().setNodeId(nodeId).setTpId(destTp).build());
                         } else {
                             // This is needed for 7.1 device models for 400GE, since we have ODUC4 and ODUflex
                             // are combined
-                            createdOduInterfaces = Set.of(this.openRoadmInterfaceFactory
+                            String[] createdOduInterfacesList = this.openRoadmInterfaceFactory
                                 .createOpenRoadmOdu4HOInterface(
-                                    nodeId, destTp, false, apiInfoA, apiInfoZ, PT_07).split("#"));
+                                    nodeId, destTp, false, apiInfoA, apiInfoZ, PT_07)
+                                .split("#");
+                            transactionHistory.addInterfaces(nodeId, createdOduInterfacesList);
+
+                            createdOduInterfaces.addAll(Set.of(createdOduInterfacesList));
                         }
                     }
                     if ((srcTp != null) && srcTp.contains(StringConstants.CLIENT_TOKEN)) {
                         LOG.info("Adding supporting EThernet interface for node {}, src tp {}", nodeId, srcTp);
                         crossConnectFlag++;
                         // create OpenRoadm Xponder Client Interfaces
-                        createdEthInterfaces.add(this.openRoadmInterfaceFactory.createOpenRoadmEthInterface(
-                                nodeId, srcTp));
+                        String openRoadmEthInterface = this.openRoadmInterfaceFactory.createOpenRoadmEthInterface(
+                            nodeId, srcTp);
+                        createdEthInterfaces.add(openRoadmEthInterface);
+                        transactionHistory.add(
+                            new DeviceInterface(nodeId, openRoadmEthInterface)
+                        );
                     }
                     if ((srcTp != null) && srcTp.contains(StringConstants.NETWORK_TOKEN)) {
                         LOG.info("Adding supporting OCH interface for node {}, src tp {}, spectrumInformation {}",
@@ -188,44 +225,77 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
                         // create OpenRoadm Xponder Line Interfaces
                         String supportingOchInterface = this.openRoadmInterfaceFactory.createOpenRoadmOchInterface(
                                 nodeId, srcTp, spectrumInformation);
+                        transactionHistory.add(
+                            new DeviceInterface(nodeId, supportingOchInterface)
+                        );
                         createdOchInterfaces.add(supportingOchInterface);
                         // Split the string based on # pass the last element as the supported Interface
                         // This is needed for 7.1 device models with B100G, we have OTSI, OTSI-group combined as OCH
                         String[] listOfSuppOchInf = supportingOchInterface.split("#");
+                        transactionHistory.addInterfaces(nodeId, listOfSuppOchInf);
+
                         List<String> tmpCreatedOchInterfaces = Arrays.asList(listOfSuppOchInf);
                         createdOchInterfaces.addAll(tmpCreatedOchInterfaces);
                         // Taking the last element
                         supportingOchInterface = tmpCreatedOchInterfaces.get(tmpCreatedOchInterfaces.size() - 1);
                         String supportingOtuInterface = this.openRoadmInterfaceFactory.createOpenRoadmOtu4Interface(
                                 nodeId, srcTp, supportingOchInterface, apiInfoA, apiInfoZ);
+                        transactionHistory.add(
+                            new DeviceInterface(nodeId, supportingOtuInterface)
+                        );
+
                         createdOtuInterfaces.add(supportingOtuInterface);
                         if (destTp == null) {
                             otnLinkTps.add(new LinkTpBuilder().setNodeId(nodeId).setTpId(srcTp).build());
                         } else {
-                            createdOduInterfaces.add(this.openRoadmInterfaceFactory.createOpenRoadmOdu4HOInterface(
-                                    nodeId, srcTp, false, apiInfoA, apiInfoZ, PT_07));
+                            String openRoadmOdu4HOInterface =
+                                this.openRoadmInterfaceFactory.createOpenRoadmOdu4HOInterface(
+                                    nodeId, srcTp, false, apiInfoA, apiInfoZ, PT_07);
+                            transactionHistory.add(
+                                new DeviceInterface(nodeId, openRoadmOdu4HOInterface)
+                            );
+
+                            createdOduInterfaces.add(openRoadmOdu4HOInterface);
                         }
                     }
                     if ((destTp != null) && destTp.contains(StringConstants.CLIENT_TOKEN)) {
                         LOG.info("Adding supporting EThernet interface for node {}, dest tp {}", nodeId, destTp);
                         crossConnectFlag++;
                         // create OpenRoadm Xponder Client Interfaces
-                        createdEthInterfaces.add(this.openRoadmInterfaceFactory.createOpenRoadmEthInterface(
-                                nodeId, destTp));
+                        String openRoadmEthInterface = this.openRoadmInterfaceFactory.createOpenRoadmEthInterface(
+                            nodeId, destTp);
+                        transactionHistory.add(
+                            new DeviceInterface(nodeId, openRoadmEthInterface)
+                        );
+
+                        createdEthInterfaces.add(openRoadmEthInterface);
                     }
                     if ((srcTp != null) && (srcTp.contains(StringConstants.TTP_TOKEN)
                             || srcTp.contains(StringConstants.PP_TOKEN))) {
                         LOG.info("Adding supporting OCH interface for node {}, src tp {}, spectrumInformation {}",
                                 nodeId, srcTp, spectrumInformation);
-                        createdOchInterfaces.addAll(this.openRoadmInterfaceFactory.createOpenRoadmOchInterfaces(
-                                nodeId, srcTp, spectrumInformation));
+                        List<String> openRoadmOchInterfaces =
+                            this.openRoadmInterfaceFactory.createOpenRoadmOchInterfaces(
+                                nodeId, srcTp, spectrumInformation);
+                        transactionHistory.addInterfaces(
+                            nodeId,
+                            openRoadmOchInterfaces
+                        );
+
+                        createdOchInterfaces.addAll(openRoadmOchInterfaces);
+
                     }
                     if ((destTp != null) && (destTp.contains(StringConstants.TTP_TOKEN)
                             || destTp.contains(StringConstants.PP_TOKEN))) {
                         LOG.info("Adding supporting OCH interface for node {}, dest tp {}, spectrumInformation {}",
                                 nodeId, destTp, spectrumInformation);
-                        createdOchInterfaces.addAll(this.openRoadmInterfaceFactory.createOpenRoadmOchInterfaces(
-                                nodeId, destTp, spectrumInformation));
+                        List<String> openRoadmOchInterfaces =
+                            this.openRoadmInterfaceFactory.createOpenRoadmOchInterfaces(
+                                nodeId, destTp, spectrumInformation);
+                        transactionHistory.addInterfaces(nodeId, openRoadmOchInterfaces);
+
+                        createdOchInterfaces.addAll(openRoadmOchInterfaces);
+
                     }
                     if (crossConnectFlag < 1) {
                         LOG.info("Creating cross connect between source {} and destination {} for node {}", srcTp,
@@ -234,6 +304,10 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
                                 this.crossConnect.postCrossConnect(nodeId, srcTp, destTp, spectrumInformation);
                         if (connectionNameOpt.isPresent()) {
                             nodesProvisioned.add(nodeId);
+                            transactionHistory.add(
+                                new Connection(nodeId, connectionNameOpt.get(), false)
+                            );
+
                             createdConnections.add(connectionNameOpt.get());
                         } else {
                             processErrorMessage("Unable to post Roadm-connection for node " + nodeId, forkJoinPool,
@@ -312,6 +386,10 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
         ForkJoinTask forkJoinTask = forkJoinPool.submit(() -> nodes.parallelStream().forEach(node -> {
             String nodeId = node.getNodeId();
             LOG.info("Deleting service setup on node {}", nodeId);
+            if (this.portMapping.getNode(nodeId).getNodeInfo().getNodeType().getIntValue() == 3) {
+                LOG.info("Node is ILA, nothing to do");
+                return;
+            }
             if (node.getDestTp() == null) {
                 LOG.error("Destination termination point must not be null.");
                 return;
@@ -387,11 +465,11 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
         List<String> interfacesToDelete = new LinkedList<>();
         String connectionNumber = String.join(GridConstant.NAME_PARAMETERS_SEPARATOR, srcTp, destTp, spectralSlotName);
         List<String> intToDelete = this.crossConnect.deleteCrossConnect(nodeId, connectionNumber, false);
-        for (String interf : intToDelete == null ? new ArrayList<String>() : intToDelete) {
-            if (!this.openRoadmInterfaceFactory.isUsedByXc(
-                    nodeId, interf, connectionNumber, this.deviceTransactionManager)) {
-                interfacesToDelete.add(interf);
-            }
+        if (intToDelete == null) {
+            return interfacesToDelete;
+        }
+        for (String interf : intToDelete) {
+            interfacesToDelete.add(interf);
         }
         return interfacesToDelete;
     }
@@ -472,8 +550,6 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
         return interfacesToDelete;
     }
 
-
-
     @Override
     public RendererRollbackOutput rendererRollback(RendererRollbackInput input) {
         boolean success = true;
@@ -529,6 +605,27 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
                 .setSuccess(success)
                 .setFailedToRollback(failedToRollbackList)
                 .build();
+    }
+
+    @Override
+    public RendererRollbackOutput rendererRollback(History transactionHistory) {
+        LOG.info("Rolling back...");
+
+        Result rollbackResult = new FailedRollbackResult();
+        Subscriber deleteSubscriber = new DeleteSubscriber(rollbackResult);
+
+        transactionHistory.rollback(
+            new DeleteService(
+                crossConnect,
+                openRoadmInterfaces,
+                deleteSubscriber
+            )
+        );
+
+        LOG.info("Rollback done!");
+
+        return rollbackResult.renderRollbackOutput();
+
     }
 
     private boolean alarmSuppressionNodeRegistration(ServicePathInput input) {

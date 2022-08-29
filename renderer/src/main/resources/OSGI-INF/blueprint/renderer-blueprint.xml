@@ -87,13 +87,17 @@ and is available at http://www.eclipse.org/legal/epl-v10.html
     <argument ref="otnDeviceRenderer" />
   </bean>
 
+  <bean id="NotificationSender" class="org.opendaylight.transportpce.renderer.provisiondevice.notification.NotificationSender">
+    <argument ref="notificationPublishService" />
+  </bean>
+
   <bean id="rendererServiceOperations" class="org.opendaylight.transportpce.renderer.provisiondevice.RendererServiceOperationsImpl" >
     <argument ref="deviceRenderer" />
     <argument ref="otnDeviceRenderer"/>
     <argument ref="olmService" />
     <argument ref="dataBroker" />
-    <argument ref="notificationPublishService" />
     <argument ref="portMapping" />
+    <argument ref="NotificationSender" />
   </bean>
 
   <bean id="rendererProvider" class="org.opendaylight.transportpce.renderer.RendererProvider"

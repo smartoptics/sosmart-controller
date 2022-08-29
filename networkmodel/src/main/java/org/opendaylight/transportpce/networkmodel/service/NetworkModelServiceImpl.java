@@ -33,6 +33,11 @@ import org.opendaylight.transportpce.networkmodel.util.OpenRoadmNetwork;
 import org.opendaylight.transportpce.networkmodel.util.OpenRoadmOtnTopology;
 import org.opendaylight.transportpce.networkmodel.util.OpenRoadmTopology;
 import org.opendaylight.transportpce.networkmodel.util.TopologyUtils;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.MountedNodes;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.MountedNodesBuilder;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.mounted.nodes.Nodes;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.mounted.nodes.NodesBuilder;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.mounted.nodes.NodesKey;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkmodel.rev201116.TopologyUpdateResult;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkmodel.rev201116.TopologyUpdateResultBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkmodel.rev201116.topology.update.result.TopologyChanges;
@@ -104,21 +109,29 @@ public class NetworkModelServiceImpl implements NetworkModelService {
     }
 
     @Override
-    public void createOpenRoadmNode(String nodeId, String openRoadmVersion) {
+    public boolean createOpenRoadmNode(String nodeId, String openRoadmVersion) {
+        return createOpenRoadmNode(nodeId, openRoadmVersion, true);
+    }
+
+    @Override
+    public boolean createOpenRoadmNode(String nodeId, String openRoadmVersion, boolean reconnect) {
         try {
             LOG.info("createOpenROADMNode: {} ", nodeId);
 
             boolean firstMount;
             if (portMapping.getNode(nodeId) == null) {
                 firstMount = true;
+            } else if (reconnect && this.topologyShardMountedDevice.containsKey(nodeId)) {
+                LOG.info("{} already exists in portmapping but was reconnected, skipping node creation", nodeId);
+                return true;
             } else {
-                LOG.info("{} already exists in portmapping but was reconnected", nodeId);
+                LOG.info("{} already exists in portmapping but update or restore requested", nodeId);
                 firstMount = false;
             }
 
             if (!portMapping.createMappingData(nodeId, openRoadmVersion)) {
                 LOG.warn("Could not generate port mapping for {} skipping network model creation", nodeId);
-                return;
+                return false;
             }
             NodeInfo nodeInfo = portMapping.getNode(nodeId).getNodeInfo();
             // node creation in clli-network
@@ -173,15 +186,31 @@ public class NetworkModelServiceImpl implements NetworkModelService {
             if (nodeInfo.getNodeType().getIntValue() == 2 && (nodeInfo.getOpenroadmVersion().getIntValue() != 1)) {
                 createOpenRoadmOtnNode(nodeId);
             }
+
+            // node creation in mounted-nodes
+            Nodes nodes = new NodesBuilder().withKey(new NodesKey(nodeId))
+                .setNodeId(nodeId)
+                .build();
+            Map<NodesKey,Nodes> nodesList = new HashMap<>();
+            nodesList.put(nodes.key(),nodes);
+            MountedNodes mountedNodes = new MountedNodesBuilder().setNodes(nodesList).build();
+            InstanceIdentifier<MountedNodes> iimountedNodes = InstanceIdentifier.builder(MountedNodes.class)
+                .build();
+            LOG.info("creating node in mounted nodes list");
+            networkTransactionService.merge(LogicalDatastoreType.CONFIGURATION, iimountedNodes,
+                mountedNodes);
+
             networkTransactionService.commit().get();
             // neighbour links through LLDP
-            if (nodeInfo.getNodeType().getIntValue() == 1) {
+            if (nodeInfo.getNodeType().getIntValue() == 1 || nodeInfo.getNodeType().getIntValue() == 3) {
                 this.linkDiscovery.readLLDP(new NodeId(nodeId), openRoadmVersion);
             }
             LOG.info("all nodes and links created");
         } catch (InterruptedException | ExecutionException e) {
             LOG.error("ERROR: ", e);
+            return false;
         }
+        return true;
     }
 
     @Override
@@ -205,6 +234,11 @@ public class NetworkModelServiceImpl implements NetworkModelService {
             if (!this.portMapping.isNodeExist(nodeId)) {
                 return false;
             }
+            LOG.info("deleting node in mounted nodes list");
+            InstanceIdentifier<Nodes> iiNodes = InstanceIdentifier.builder(MountedNodes.class)
+                .child(Nodes.class, new NodesKey(nodeId)).build();
+            this.networkTransactionService.delete(LogicalDatastoreType.CONFIGURATION, iiNodes);
+
             NodeKey nodeIdKey = new NodeKey(new NodeId(nodeId));
 
             LOG.info("deleting node in {}", NetworkUtils.UNDERLAY_NETWORK_ID);

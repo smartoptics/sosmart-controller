@@ -1,0 +1,28 @@
+module transportpce-mounted-nodes {
+  yang-version 1;
+  namespace "http://org/opendaylight/transportpce/mountednodes";
+  prefix "org-opendaylight-transportpce-mountednodes";
+
+  organization
+    "transportPCE";
+  contact
+    "transportPCE committers - ODL";
+  description
+    "YANG definitions mounted nodes";
+
+  revision 2023-06-20 {
+    description
+        "initial version";
+  }
+
+  container mounted-nodes {
+    list nodes {
+      key node-id;
+      leaf node-id {
+        type string;
+        description
+          "Unique identifier for node in the network";
+      }
+    }
+  }
+}

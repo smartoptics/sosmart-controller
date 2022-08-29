@@ -14,6 +14,7 @@ import org.opendaylight.transportpce.renderer.ServicePathInputData;
 import org.opendaylight.transportpce.renderer.provisiondevice.DeviceRendererService;
 import org.opendaylight.transportpce.renderer.provisiondevice.DeviceRenderingResult;
 import org.opendaylight.transportpce.renderer.provisiondevice.servicepath.ServicePathDirection;
+import org.opendaylight.transportpce.renderer.provisiondevice.transaction.history.History;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.device.renderer.rev211004.ServicePathOutput;
 import org.opendaylight.yang.gen.v1.http.org.transportpce.common.types.rev210930.optical.renderer.nodes.Nodes;
 import org.slf4j.Logger;
@@ -26,12 +27,15 @@ public class DeviceRenderingTask implements Callable<DeviceRenderingResult> {
     private final DeviceRendererService deviceRenderer;
     private final ServicePathInputData servicePathInputData;
     private final ServicePathDirection direction;
+    private final History transactionHistory;
 
-    public DeviceRenderingTask(DeviceRendererService deviceRenderer, ServicePathInputData servicePathInputData,
-            ServicePathDirection direction) {
+    public DeviceRenderingTask(DeviceRendererService deviceRenderer,
+        ServicePathInputData servicePathInputData, ServicePathDirection direction,
+        History transactionHistory) {
         this.deviceRenderer = deviceRenderer;
         this.servicePathInputData = servicePathInputData;
         this.direction = direction;
+        this.transactionHistory = transactionHistory;
     }
 
     @Override
@@ -42,8 +46,9 @@ public class DeviceRenderingTask implements Callable<DeviceRenderingResult> {
         switch (this.servicePathInputData.getServicePathInput().getOperation()) {
             case Create:
                 operation = "setup";
-                output = this.deviceRenderer.setupServicePath(this.servicePathInputData.getServicePathInput(),
-                    this.direction);
+                output = this.deviceRenderer.setupServicePath(
+                    this.servicePathInputData.getServicePathInput(),
+                    this.direction, transactionHistory);
                 olmList = this.servicePathInputData.getNodeLists().getOlmNodeList();
                 break;
             case Delete:

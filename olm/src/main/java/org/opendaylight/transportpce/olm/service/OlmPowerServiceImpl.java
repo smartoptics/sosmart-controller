@@ -381,6 +381,51 @@ public class OlmPowerServiceImpl implements OlmPowerService {
     }
 
     /**
+     * This method retrieves OMS PM from current PM list by nodeId and TPId: Steps:
+     *
+     * <p>
+     * 1. Get OMS interface name from port mapping by TPId 2. Call getPm RPC to get OMS PM
+     *
+     * <p>
+     *
+     * @param nodeId Node-id of the NE.
+     * @param tpID Termination point Name.
+     * @param pmName PM name which need to be retrieved
+     * @return reference to OmsPmHolder
+     */
+    private OtsPmHolder getOmsPmMeasurements(String nodeId, String tpID, String pmName) {
+        String realNodeId = getRealNodeId(nodeId);
+        Mapping mapping = portMapping.getMapping(realNodeId, tpID);
+        if (mapping == null) {
+            return null;
+        }
+        GetPmInput getPmInput = new GetPmInputBuilder().setNodeId(realNodeId)
+            .setResourceType(ResourceTypeEnum.Interface)
+            .setResourceIdentifier(
+                new ResourceIdentifierBuilder().setResourceName(mapping.getSupportingOms()).build())
+            .setPmNameType(PmNamesEnum.valueOf(pmName))
+            .setGranularity(PmGranularity._15min)
+            .build();
+        GetPmOutput omsPmOutput = getPm(getPmInput);
+
+        if (omsPmOutput == null || omsPmOutput.getMeasurements() == null) {
+            LOG.info("OMS PM not found for NodeId: {} TP Id:{} PMName:{}", realNodeId, tpID, pmName);
+            return null;
+        }
+        try {
+            for (Measurements measurement : omsPmOutput.getMeasurements()) {
+                if (pmName.equalsIgnoreCase(measurement.getPmparameterName())) {
+                    return new OtsPmHolder(pmName, Double.parseDouble(measurement.getPmparameterValue()),
+                        mapping.getSupportingOts());
+                }
+            }
+        } catch (NumberFormatException e) {
+            LOG.warn("Unable to get PM for NodeId: {} TP Id:{} PMName:{}", realNodeId, tpID, pmName, e);
+        }
+        return null;
+    }
+
+    /**
      * This method Sets Spanloss on A-End and Z-End OTS interface: Steps:
      *
      * <p>
@@ -532,37 +577,45 @@ public class OlmPowerServiceImpl implements OlmPowerService {
             String sourceTpId = link.getSrcTpId();
             String destNodeId = link.getDestNodeId();
             String destTpId = link.getDestTpid();
-            OtsPmHolder srcOtsPmHolder = getPmMeasurements(sourceNodeId, sourceTpId, "OpticalPowerOutput");
-            if (srcOtsPmHolder == null) {
-                srcOtsPmHolder = getPmMeasurements(sourceNodeId, sourceTpId, "OpticalPowerOutputOSC");
-                if (srcOtsPmHolder == null) {
-                    LOG.warn("OTS configuration issue at {} - {}", sourceNodeId, sourceTpId);
-                    continue;
+            OtsPmHolder destPmHolder = getOmsPmMeasurements(destNodeId, destTpId, "OpticalPowerInput");
+            OtsPmHolder srcPmHolder = getOmsPmMeasurements(sourceNodeId, sourceTpId, "OpticalPowerOutput");
+            if (destPmHolder == null || srcPmHolder == null || destPmHolder.getOtsParameterVal() < -28.0) {
+                if (destPmHolder != null) {
+                    LOG.info("OMS power input {} dBm for {} too low, using OTS instead",
+                        destPmHolder.getOtsParameterVal(), destNodeId);
+                }
+                srcPmHolder = getPmMeasurements(sourceNodeId, sourceTpId, "OpticalPowerOutput");
+                if (srcPmHolder == null) {
+                    srcPmHolder = getPmMeasurements(sourceNodeId, sourceTpId, "OpticalPowerOutputOSC");
+                    if (srcPmHolder == null) {
+                        LOG.warn("OTS configuration issue at {} - {}", sourceNodeId, sourceTpId);
+                        continue;
+                    }
+                }
+                destPmHolder = getPmMeasurements(destNodeId, destTpId, "OpticalPowerInput");
+                if (destPmHolder == null) {
+                    destPmHolder = getPmMeasurements(destNodeId, destTpId, "OpticalPowerInputOSC");
+                    if (destPmHolder == null) {
+                        LOG.warn("OTS configuration issue at {} - {}", destNodeId, destTpId);
+                        continue;
+                    }
                 }
             }
-            OtsPmHolder destOtsPmHolder = getPmMeasurements(destNodeId, destTpId, "OpticalPowerInput");
-            if (destOtsPmHolder == null) {
-                destOtsPmHolder = getPmMeasurements(destNodeId, destTpId, "OpticalPowerInputOSC");
-                if (destOtsPmHolder == null) {
-                    LOG.warn("OTS configuration issue at {} - {}", destNodeId, destTpId);
-                    continue;
-                }
-            }
-            spanLoss = BigDecimal.valueOf(srcOtsPmHolder.getOtsParameterVal() - destOtsPmHolder.getOtsParameterVal())
+            spanLoss = BigDecimal.valueOf(srcPmHolder.getOtsParameterVal() - destPmHolder.getOtsParameterVal())
                 .setScale(1, RoundingMode.HALF_UP);
             LOG.info("Spanloss Calculated as :{}={}-{}",
-                spanLoss, srcOtsPmHolder.getOtsParameterVal(), destOtsPmHolder.getOtsParameterVal());
+                spanLoss, srcPmHolder.getOtsParameterVal(), destPmHolder.getOtsParameterVal());
             if (spanLoss.doubleValue() > 28) {
                 LOG.warn("Span Loss is out of range of OpenROADM specifications");
             }
             if (spanLoss.intValue() <= 0) {
                 spanLoss = BigDecimal.valueOf(0);
             }
-            if (!setSpanLoss(sourceNodeId, srcOtsPmHolder.getOtsInterfaceName(), spanLoss, "TX")) {
+            if (!setSpanLoss(sourceNodeId, srcPmHolder.getOtsInterfaceName(), spanLoss, "TX")) {
                 LOG.info("Setting spanLoss failed for {}", sourceNodeId);
                 return null;
             }
-            if (!setSpanLoss(destNodeId, destOtsPmHolder.getOtsInterfaceName(), spanLoss, "RX")) {
+            if (!setSpanLoss(destNodeId, destPmHolder.getOtsInterfaceName(), spanLoss, "RX")) {
                 LOG.info("Setting spanLoss failed for {}", destNodeId);
                 return null;
             }

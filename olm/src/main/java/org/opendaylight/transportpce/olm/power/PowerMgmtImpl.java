@@ -8,7 +8,7 @@
 
 package org.opendaylight.transportpce.olm.power;
 import java.math.BigDecimal;
-import java.math.MathContext;
+// import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Locale;
@@ -24,13 +24,17 @@ import org.opendaylight.transportpce.olm.util.OlmUtils;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.olm.rev210618.ServicePowerSetupInput;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.olm.rev210618.ServicePowerTurndownInput;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.OpenroadmNodeVersion;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.cp.to.degree.CpToDegree;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.cp.to.degree.CpToDegreeKey;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.mapping.Mapping;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.mapping.MappingKey;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.network.Nodes;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.common.types.rev161014.OpticalControlMode;
+import org.opendaylight.yang.gen.v1.http.org.openroadm.common.types.rev181019.LineAmplifierControlMode;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev170206.interfaces.grp.Interface;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.optical.transport.interfaces.rev161014.Interface1;
 import org.opendaylight.yangtools.yang.common.Decimal64;
+import org.opendaylight.yangtools.yang.common.Uint8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,10 +49,11 @@ public class PowerMgmtImpl implements PowerMgmt {
     private static final String INTERFACE_NOT_PRESENT = "Interface {} on node {} is not present!";
     private static final double MC_WIDTH_GRAN = 2 * GridConstant.GRANULARITY;
 
-    private long timer1 = 120000;
+    private long timer1 = 35000;
     // openroadm spec value is 120000, functest value is 3000
-    private long timer2 = 20000;
+    private long timer2 = 5000;
     // openroadm spec value is 20000, functest value is 2000
+    private long timerIla = 2000;
 
     public PowerMgmtImpl(DataBroker db, OpenRoadmInterfaces openRoadmInterfaces,
                          CrossConnect crossConnect, DeviceTransactionManager deviceTransactionManager) {
@@ -68,14 +73,14 @@ public class PowerMgmtImpl implements PowerMgmt {
         try {
             this.timer1 = Long.parseLong(timer1);
         } catch (NumberFormatException e) {
-            this.timer1 = 120000;
+            this.timer1 = 35000;
             LOG.warn("Failed to retrieve Olm timer1 value from configuration - using default value {}",
                 this.timer1, e);
         }
         try {
             this.timer2 = Long.parseLong(timer2);
         } catch (NumberFormatException e) {
-            this.timer2 = 20000;
+            this.timer2 = 5000;
             LOG.warn("Failed to retrieve Olm timer2 value from configuration - using default value {}",
                 this.timer2, e);
         }
@@ -104,7 +109,7 @@ public class PowerMgmtImpl implements PowerMgmt {
             if (inputNodeOptional.isEmpty()
                     || inputNodeOptional.get().getNodeInfo().getNodeType() == null) {
                 LOG.error("OLM-PowerMgmtImpl : Error node type cannot be retrieved for node {}", nodeId);
-                continue;
+                return false;
             }
             Nodes inputNode = inputNodeOptional.get();
             OpenroadmNodeVersion openroadmVersion = inputNode.getNodeInfo().getOpenroadmVersion();
@@ -177,8 +182,8 @@ public class PowerMgmtImpl implements PowerMgmt {
 
                     LOG.info("Spanloss TX is {}", spanLossTx);
                     // TODO: The span-loss limits should be obtained from optical specifications
-                    if (spanLossTx == null || spanLossTx.intValue() <= 0 || spanLossTx.intValue() > 27) {
-                        LOG.error("Power Value is null: spanLossTx null or out of openROADM range ]0,27] {}",
+                    if (spanLossTx == null || spanLossTx.intValue() < 0) {
+                        LOG.error("spanLossTx is null or negative {}",
                             spanLossTx);
                         return false;
                     }
@@ -186,13 +191,13 @@ public class PowerMgmtImpl implements PowerMgmt {
                     try {
                         if (!crossConnect.setPowerLevel(nodeId, OpticalControlMode.Power.getName(), powerValue,
                                 connectionNumber)) {
-                            LOG.info("Set Power failed for Roadm-connection: {} on Node: {}",
+                            LOG.error("Set Power failed for Roadm-connection: {} on Node: {}",
                                     connectionNumber, nodeId);
                             // FIXME shouldn't it be LOG.error
                             return false;
                         }
                         LOG.info("Roadm-connection: {} updated ", connectionNumber);
-                        Thread.sleep(timer2);
+                        Thread.sleep(timer1);
                         // TODO make this timer value configurable via OSGi blueprint
                         // although the value recommended by the white paper is 20 seconds.
                         // At least one vendor product needs 60 seconds
@@ -200,12 +205,86 @@ public class PowerMgmtImpl implements PowerMgmt {
 
                         if (!crossConnect.setPowerLevel(nodeId, OpticalControlMode.GainLoss.getName(), powerValue,
                                 connectionNumber)) {
-                            LOG.warn("Setting power-control mode off failed for Roadm-connection: {}",
-                                connectionNumber);
+                            LOG.error("Set GainLoss failed for Roadm-connection: {} on Node: {}",
+                                    connectionNumber, nodeId);
                             // FIXME no return false in that case?
+                            return false;
                         }
                     } catch (InterruptedException e) {
                         LOG.error("Olm-setPower wait failed :", e);
+                        return false;
+                    }
+                    break;
+                case Ila:
+                    if (!destTpId.toUpperCase(Locale.getDefault()).contains("DEG")) {
+                        continue;
+                    }
+                    String srcTpId = input.getNodes().get(i).getSrcTp();
+                    if (!srcTpId.toUpperCase(Locale.getDefault()).contains("DEG")) {
+                        continue;
+                    }
+                    Optional<Mapping> srcMappingObjectOptional = inputNode.nonnullMapping()
+                            .values().stream().filter(o -> o.key()
+                            .equals(new MappingKey(srcTpId))).findFirst();
+                    if (srcMappingObjectOptional.isEmpty()) {
+                        continue;
+                    }
+                    BigDecimal spanLossRx = getSpanLossRx(srcMappingObjectOptional.get().getSupportingOts(),
+                        srcTpId, nodeId, openroadmVersion.getIntValue());
+                    LOG.info("Spanloss RX is {}", spanLossRx);
+                    if (spanLossRx == null || spanLossRx.intValue() < 0) {
+                        LOG.error("spanLossRx is null or negative {}",
+                            spanLossRx);
+                        return false;
+                    }
+                    // If Degree is transmitting end then set power
+                    mappingObjectOptional = inputNode.nonnullMapping()
+                            .values().stream().filter(o -> o.key()
+                            .equals(new MappingKey(destTpId))).findFirst();
+                    if (mappingObjectOptional.isEmpty()) {
+                        continue;
+                    }
+                    String cpName = mappingObjectOptional.get().getSupportingCircuitPackName();
+                    Optional<CpToDegree> cpToDegreeObjectOptional = inputNode.nonnullCpToDegree()
+                            .values().stream().filter(o -> o.key()
+                            .equals(new CpToDegreeKey(cpName))).findFirst();
+                    if (cpToDegreeObjectOptional.isEmpty()) {
+                        continue;
+                    }
+                    // TODO can it be return false rather than continue?
+                    // in that case, mappingObjectOptional could be moved inside method getSpanLossTx()
+                    LOG.info("Dest point is Degree {}", mappingObjectOptional.get());
+                    spanLossTx = getSpanLossTx(mappingObjectOptional.get().getSupportingOts(),
+                        destTpId, nodeId, openroadmVersion.getIntValue());
+
+                    LOG.info("Spanloss TX is {}", spanLossTx);
+                    // TODO: The span-loss limits should be obtained from optical specifications
+                    if (spanLossTx == null || spanLossTx.intValue() < 0) {
+                        LOG.error("spanLossTx is null or negative {}",
+                            spanLossTx);
+                        return false;
+                    }
+                    Uint8 ampNumber = Uint8.valueOf(cpToDegreeObjectOptional.get().getDegreeNumber());
+                    // Amp parameters, TODO make dynamic
+                    BigDecimal optimalFlatGain = BigDecimal.valueOf(22.0);
+                    BigDecimal voaInsertionLoss = BigDecimal.valueOf(0.6);
+                    BigDecimal maxGain = BigDecimal.valueOf(26.0);
+
+                    BigDecimal optimalSpanloss = optimalFlatGain.subtract(voaInsertionLoss);
+                    BigDecimal targetGain = spanLossRx.max(optimalSpanloss).subtract(
+                        optimalSpanloss.subtract(spanLossTx).max(BigDecimal.valueOf(0.0)));
+                    targetGain = targetGain.min(maxGain);
+                    LOG.info("The target gain is {} dB for spanloss Rx {} and spanloss Tx {}",
+                                targetGain, spanLossRx, spanLossTx);
+                    try {
+                        if (!PowerMgmtVersion221.setIlaTargetGain(nodeId, ampNumber, LineAmplifierControlMode.GainLoss,
+                                Decimal64.valueOf(targetGain), deviceTransactionManager)) {
+                            LOG.info("Set Target Gain failed on Node: {}", nodeId);
+                            return false;
+                        }
+                        Thread.sleep(timerIla);
+                    } catch (InterruptedException e) {
+                        LOG.error("Olm-targetGain wait failed :", e);
                         return false;
                     }
                     break;
@@ -337,6 +416,57 @@ public class PowerMgmtImpl implements PowerMgmt {
         }
     }
 
+    private BigDecimal getSpanLossRx(String supportingOts, String srcTpId, String nodeId, Integer openroadmVersion) {
+        try {
+            switch (openroadmVersion) {
+                case 1:
+                    Optional<Interface> interfaceOpt =
+                        this.openRoadmInterfaces.getInterface(nodeId, supportingOts);
+                    if (interfaceOpt.isEmpty()) {
+                        LOG.error(INTERFACE_NOT_PRESENT, supportingOts, nodeId);
+                        return null;
+                    }
+                    if (interfaceOpt.get().augmentation(Interface1.class).getOts()
+                            .getSpanLossReceive() == null) {
+                        LOG.error("interface {} has no spanloss value", interfaceOpt.get().getName());
+                        return null;
+                    }
+                    return interfaceOpt.get()
+                            .augmentation(Interface1.class)
+                            .getOts().getSpanLossReceive().getValue().decimalValue();
+                case 2:
+                    Optional<org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019
+                            .interfaces.grp.Interface> interfaceOpt1 =
+                        this.openRoadmInterfaces.getInterface(nodeId, supportingOts);
+                    if (interfaceOpt1.isEmpty()) {
+                        LOG.error(INTERFACE_NOT_PRESENT, supportingOts, nodeId);
+                        return null;
+                    }
+                    if (interfaceOpt1.get().augmentation(org.opendaylight.yang.gen.v1.http.org
+                            .openroadm.optical.transport.interfaces.rev181019.Interface1.class).getOts()
+                                .getSpanLossReceive() == null) {
+                        LOG.error("interface {} has no spanloss value", interfaceOpt1.get().getName());
+                        return null;
+                    }
+                    return interfaceOpt1.get()
+                            .augmentation(org.opendaylight.yang.gen.v1.http.org
+                                .openroadm.optical.transport.interfaces.rev181019.Interface1.class)
+                            .getOts().getSpanLossReceive().getValue().decimalValue();
+                // TODO no case 3 ?
+                default:
+                    return null;
+            }
+        } catch (OpenRoadmInterfaceException ex) {
+            LOG.error("Failed to get interface {} from node {}!",
+                supportingOts, nodeId, ex);
+            return null;
+        } catch (IllegalArgumentException ex) {
+            LOG.error("Failed to get non existing interface {} from node {}!",
+                supportingOts, nodeId);
+            return null;
+        }
+    }
+
     private BigDecimal getXpdrPowerValue(Nodes inputNode, String destTpId, String nodeId, Integer openroadmVersion,
             String srgId, String nextNodeId) {
 
@@ -375,7 +505,9 @@ public class PowerMgmtImpl implements PowerMgmt {
         // TODO: These values will be obtained from the specifications
         // power-value here refers to the Pin[50GHz]
         BigDecimal powerValue;
-        if (spanLossTx.doubleValue()  >= 23.0) {
+        powerValue = spanLossTx.subtract(BigDecimal.valueOf(18.8));
+        powerValue = powerValue.min(BigDecimal.valueOf(3.2));
+        /* if (spanLossTx.doubleValue()  >= 23.0) {
             powerValue = BigDecimal.valueOf(2.0);
         } else if (spanLossTx.doubleValue()  >= 8.0) {
             powerValue = BigDecimal.valueOf(- (8.0 - spanLossTx.doubleValue()) / 3.0 - 3.0);
@@ -402,12 +534,13 @@ public class PowerMgmtImpl implements PowerMgmt {
             double pdsVal = 10 * Math.log10(logVal.doubleValue());
             // Addition of PSD value will give Pin[87.5 GHz]
             powerValue = powerValue.add(new BigDecimal(pdsVal, new MathContext(3, RoundingMode.HALF_EVEN)));
-        }
+        } */
         // FIXME compliancy with OpenROADM MSA and approximations used -- should be addressed with powermask update
         // cf JIRA ticket https://jira.opendaylight.org/browse/TRNSPRTPCE-494
         powerValue = powerValue.setScale(2, RoundingMode.CEILING);
         // target-output-power yang precision is 2, so we limit here to 2
-        LOG.info("The power value is P1[{}GHz]={} dB for spanloss {}", mcWidth, powerValue, spanLossTx);
+        // LOG.info("The power value is P1[{}GHz]={} dB for spanloss {}", mcWidth, powerValue, spanLossTx);
+        LOG.info("The power value is P1={} dB for spanloss {}", powerValue, spanLossTx);
         return powerValue;
     }
 
@@ -438,8 +571,15 @@ public class PowerMgmtImpl implements PowerMgmt {
         String spectralSlotName = String.join(GridConstant.SPECTRAL_SLOT_SEPARATOR,
                 input.getLowerSpectralSlotNumber().toString(),
                 input.getHigherSpectralSlotNumber().toString());
+        Boolean success = true;
         for (int i = input.getNodes().size() - 1; i >= 0; i--) {
             String nodeId = input.getNodes().get(i).getNodeId();
+            Optional<Nodes> inputNodeOptional = OlmUtils.getNode(nodeId, this.db);
+            if (!inputNodeOptional.isEmpty()
+                    && inputNodeOptional.get().getNodeInfo().getNodeType().getIntValue() == 3) {
+                LOG.info("Node is ILA, nothing to do");
+                continue;
+            }
             String destTpId = input.getNodes().get(i).getDestTp();
             String connectionNumber =  String.join(GridConstant.NAME_PARAMETERS_SEPARATOR,
                     input.getNodes().get(i).getSrcTp(), destTpId, spectralSlotName);
@@ -448,12 +588,13 @@ public class PowerMgmtImpl implements PowerMgmt {
                     if (!crossConnect.setPowerLevel(nodeId, OpticalControlMode.Power.getName(),
                             Decimal64.valueOf("-60"), connectionNumber)) {
                         LOG.warn("Power down failed for Roadm-connection: {}", connectionNumber);
-                        return false;
+                        success = false;
+                        continue;
                     }
                     Thread.sleep(timer2);
                     if (!crossConnect.setPowerLevel(nodeId, OpticalControlMode.Off.getName(), null, connectionNumber)) {
                         LOG.warn("Setting power-control mode off failed for Roadm-connection: {}", connectionNumber);
-                        return false;
+                        success = false;
                     }
                 } else if (destTpId.toUpperCase(Locale.getDefault()).contains("SRG")) {
                     if (!crossConnect.setPowerLevel(nodeId, OpticalControlMode.Off.getName(), null, connectionNumber)) {
@@ -464,10 +605,10 @@ public class PowerMgmtImpl implements PowerMgmt {
             } catch (InterruptedException e) {
                 // TODO Auto-generated catch block
                 LOG.error("Olm-powerTurnDown wait failed: ",e);
-                return false;
+                success = false;
             }
         }
-        return true;
+        return success;
     }
 
     /**

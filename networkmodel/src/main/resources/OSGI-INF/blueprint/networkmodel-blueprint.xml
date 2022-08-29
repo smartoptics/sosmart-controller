@@ -28,6 +28,7 @@
         <argument ref="dataBroker" />
         <argument ref="rpcProviderService" />
         <argument ref="networkutilsServiceImpl" />
+        <argument ref="createnodeServiceImpl" />
         <argument ref="netconfTopologyListener" />
         <argument ref="notificationService" />
         <argument ref="frequenciesService" />
@@ -47,6 +48,10 @@
 
     <bean id="networkutilsServiceImpl" class="org.opendaylight.transportpce.networkmodel.NetworkUtilsImpl">
         <argument ref="dataBroker" />
+    </bean>
+
+    <bean id="createnodeServiceImpl" class="org.opendaylight.transportpce.networkmodel.CreateNodeImpl">
+        <argument ref="networkModelService" />
     </bean>
 
     <bean id="linkDiscoveryImpl" class="org.opendaylight.transportpce.networkmodel.R2RLinkDiscovery">

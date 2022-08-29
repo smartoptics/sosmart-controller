@@ -18,6 +18,7 @@ import org.opendaylight.transportpce.servicehandler.listeners.PceListenerImpl;
 import org.opendaylight.transportpce.servicehandler.listeners.RendererListenerImpl;
 import org.opendaylight.transportpce.servicehandler.listeners.ServiceListener;
 import org.opendaylight.transportpce.servicehandler.service.ServiceDataStoreOperations;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.editservice.rev230123.TransportpceEditserviceService;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkmodel.rev201116.TransportpceNetworkmodelListener;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.TransportpcePceListener;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.renderer.rev210915.TransportpceRendererListener;
@@ -50,17 +51,20 @@ public class ServicehandlerProvider {
     private ListenerRegistration<TransportpceRendererListener> rendererlistenerRegistration;
     private ListenerRegistration<TransportpceNetworkmodelListener> networkmodellistenerRegistration;
     private ObjectRegistration<OrgOpenroadmServiceService> rpcRegistration;
+    private ObjectRegistration<TransportpceEditserviceService> editServiceRpcRegistration;
     private ServiceDataStoreOperations serviceDataStoreOperations;
     private PceListenerImpl pceListenerImpl;
     private ServiceListener serviceListener;
     private RendererListenerImpl rendererListenerImpl;
     private NetworkModelListenerImpl networkModelListenerImpl;
     private ServicehandlerImpl servicehandler;
+    private TransportpceEditserviceService editserviceService;
 
     public ServicehandlerProvider(final DataBroker dataBroker, RpcProviderService rpcProviderService,
             NotificationService notificationService, ServiceDataStoreOperations serviceDataStoreOperations,
             PceListenerImpl pceListenerImpl, ServiceListener serviceListener, RendererListenerImpl rendererListenerImpl,
-            NetworkModelListenerImpl networkModelListenerImpl, ServicehandlerImpl servicehandler) {
+            NetworkModelListenerImpl networkModelListenerImpl, ServicehandlerImpl servicehandler,
+            TransportpceEditserviceService editserviceService) {
         this.dataBroker = dataBroker;
         this.rpcService = rpcProviderService;
         this.notificationService = notificationService;
@@ -71,6 +75,7 @@ public class ServicehandlerProvider {
         this.rendererListenerImpl = rendererListenerImpl;
         this.networkModelListenerImpl = networkModelListenerImpl;
         this.servicehandler = servicehandler;
+        this.editserviceService = editserviceService;
     }
 
     /**
@@ -84,6 +89,8 @@ public class ServicehandlerProvider {
         rendererlistenerRegistration = notificationService.registerNotificationListener(rendererListenerImpl);
         networkmodellistenerRegistration = notificationService.registerNotificationListener(networkModelListenerImpl);
         rpcRegistration = rpcService.registerRpcImplementation(OrgOpenroadmServiceService.class, servicehandler);
+        editServiceRpcRegistration = rpcService
+            .registerRpcImplementation(TransportpceEditserviceService.class, editserviceService);
     }
 
     /**
@@ -96,6 +103,7 @@ public class ServicehandlerProvider {
         rendererlistenerRegistration.close();
         networkmodellistenerRegistration.close();
         rpcRegistration.close();
+        editServiceRpcRegistration.close();
     }
 
 }

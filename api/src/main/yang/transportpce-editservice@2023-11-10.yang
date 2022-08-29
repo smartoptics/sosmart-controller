@@ -1,0 +1,103 @@
+module transportpce-editservice {
+  yang-version 1;
+  namespace "http://org/opendaylight/transportpce/editservice";
+  prefix org-opendaylight-transportpce-editservice;
+
+  revision 2023-11-10 {
+    description
+      "Initial revision of edit service model";
+  }
+
+  grouping xponder-port {
+    container xponder-port {
+      description
+        "Muxponder port used in tail, that will get used as a service endpoint.";
+      leaf circuit-pack-name {
+        type string;
+      }
+      leaf port-name {
+        type string;
+      }
+    }
+  }
+
+  rpc rename-service {
+    description
+      "This rpc renames a service";
+    input {
+      leaf service-name {
+        type string;
+      }
+      leaf new-service-name {
+        type string;
+      }
+    }
+    output {
+      leaf result {
+        type string;
+      }
+    }
+  }
+
+  rpc change-request-id {
+    description
+      "This rpc changes the request-id of a service";
+    input {
+      leaf service-name {
+        type string;
+      }
+      leaf new-request-id {
+        type string;
+      }
+    }
+    output {
+      leaf result {
+        type string;
+      }
+    }
+  }
+
+  rpc add-xpdr-to-service {
+    description
+      "This rpc adds XPONDERs to a service";
+    input {
+      leaf service-name {
+        type string;
+      }
+      container service-a-end {
+        uses xponder-port;
+      }
+      container service-z-end {
+        uses xponder-port;
+      }
+    }
+    output {
+      leaf result {
+        type string;
+      }
+    }
+  }
+
+  rpc remove-xpdr-from-service {
+    description
+      "This rpc removes XPONDERs from a service";
+    input {
+      leaf service-name {
+        type string;
+      }
+      leaf service-a-end {
+        type boolean;
+        default false;
+      }
+      leaf service-z-end {
+        type boolean;
+        default false;
+      }
+    }
+    output {
+      leaf result {
+        type string;
+      }
+    }
+  }
+}

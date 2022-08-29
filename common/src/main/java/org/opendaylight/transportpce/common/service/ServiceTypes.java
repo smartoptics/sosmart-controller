@@ -77,8 +77,8 @@ public final class ServiceTypes {
         }
 
         if (!otnMap.get(serviceFormat).containsKey(serviceRate)) {
-            LOG.warn("Invalid service-rate {}", serviceRate);
-            return null;
+            LOG.warn("Unknown service-rate {}, setting OTU4 service-type", serviceRate);
+            return StringConstants.SERVICE_TYPE_OTU4;
         }
 
         return otnMap.get(serviceFormat).get(serviceRate);

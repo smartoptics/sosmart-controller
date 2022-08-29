@@ -505,7 +505,7 @@ public class OpenRoadmInterface221 {
             LogicalDatastoreType.CONFIGURATION, xciid, Timeouts.DEVICE_READ_TIMEOUT, Timeouts.DEVICE_READ_TIMEOUT_UNIT);
         if (crossconnection.isPresent()) {
             RoadmConnections rc = crossconnection.get();
-            LOG.info("xd {} found", xc);
+            LOG.info("xc {} found in node {}", xc, nodeId);
             String supportedinter = null;
             if (!interfaceName.contains("nmc")) {
                 supportedinter = interfaceName.replace("mc", "nmc");
@@ -517,7 +517,7 @@ public class OpenRoadmInterface221 {
                 return true;
             }
         } else {
-            LOG.info("xd {} not found !", xc);
+            LOG.info("xc {} not found in node {}", xc, nodeId);
         }
         return false;
     }

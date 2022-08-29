@@ -55,9 +55,20 @@ public class CrossConnectImpl221 {
     private static final String DEV_TRANSACTION_NOT_FOUND = "Device transaction for device {} was not found!";
     private static final String UNABLE_DEV_TRANSACTION = "Unable to obtain device transaction for device {}!";
     private final DeviceTransactionManager deviceTransactionManager;
+    private boolean recreateServices = false;
 
     public CrossConnectImpl221(DeviceTransactionManager deviceTransactionManager) {
         this.deviceTransactionManager = deviceTransactionManager;
+    }
+
+    public CrossConnectImpl221(DeviceTransactionManager deviceTransactionManager, String recreateServices) {
+        this.deviceTransactionManager = deviceTransactionManager;
+        this.recreateServices = Boolean.parseBoolean(recreateServices);
+        if (this.recreateServices) {
+            LOG.warn("Initializing CrossConnectImpl in recreate services mode");
+        } else {
+            LOG.info("Initializing CrossConnectImpl in normal mode");
+        }
     }
 
     public Optional<RoadmConnections> getCrossConnect(String deviceId, String connectionNumber) {
@@ -78,9 +89,17 @@ public class CrossConnectImpl221 {
     public Optional<String> postCrossConnect(String deviceId, String srcTp, String destTp,
                                              SpectrumInformation spectrumInformation) {
         String connectionNumber = spectrumInformation.getIdentifierFromParams(srcTp, destTp);
+        OpticalControlMode opticalControlMode;
+        if (this.recreateServices) {
+            opticalControlMode = OpticalControlMode.GainLoss;
+            LOG.warn("Recreating service with optical control mode gainloss");
+        } else {
+            opticalControlMode = OpticalControlMode.Off;
+            LOG.info("Normal service create with control mode off");
+        }
         RoadmConnectionsBuilder rdmConnBldr = new RoadmConnectionsBuilder()
                 .setConnectionName(connectionNumber)
-                .setOpticalControlMode(OpticalControlMode.Off)
+                .setOpticalControlMode(opticalControlMode)
                 .setSource(new SourceBuilder()
                         .setSrcIf(spectrumInformation.getIdentifierFromParams(srcTp,"nmc"))
                         .build())
@@ -127,22 +146,31 @@ public class CrossConnectImpl221 {
 
     public List<String> deleteCrossConnect(String deviceId, String connectionName, boolean isOtn) {
         List<String> interfList = new ArrayList<>();
-        Optional<RoadmConnections> xc = getCrossConnect(deviceId, connectionName);
-        Optional<org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.org
-                .openroadm.device.OduConnection> otnXc = getOtnCrossConnect(deviceId, connectionName);
-        //Check if cross connect exists before delete
-        if (xc.isPresent()) {
-            interfList.add(xc.get().getSource().getSrcIf());
-            interfList.add(xc.get().getDestination().getDstIf());
-            interfList.add(xc.get().getSource().getSrcIf().replace("nmc", "mc"));
-            interfList.add(xc.get().getDestination().getDstIf().replace("nmc", "mc"));
-        } else if (otnXc.isPresent()) {
-            interfList.add(otnXc.get().getSource().getSrcIf());
-            interfList.add(otnXc.get().getDestination().getDstIf());
+        if (isOtn) {
+            Optional<org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.org
+                    .openroadm.device.OduConnection> otnXc = getOtnCrossConnect(deviceId, connectionName);
+            //Check if cross connect exists before delete
+            if (otnXc.isPresent()) {
+                interfList.add(otnXc.get().getSource().getSrcIf());
+                interfList.add(otnXc.get().getDestination().getDstIf());
+            } else {
+                LOG.warn("Cross connect {} does not exist, halting delete", connectionName);
+                return null;
+            }
         } else {
-            LOG.warn("Cross connect {} does not exist, halting delete", connectionName);
-            return null;
+            Optional<RoadmConnections> xc = getCrossConnect(deviceId, connectionName);
+            //Check if cross connect exists before delete
+            if (xc.isPresent()) {
+                interfList.add(xc.get().getSource().getSrcIf());
+                interfList.add(xc.get().getDestination().getDstIf());
+                interfList.add(xc.get().getSource().getSrcIf().replace("nmc", "mc"));
+                interfList.add(xc.get().getDestination().getDstIf().replace("nmc", "mc"));
+            } else {
+                LOG.warn("Cross connect {} does not exist, halting delete", connectionName);
+                return null;
+            }
         }
+
         Future<Optional<DeviceTransaction>> deviceTxFuture = deviceTransactionManager.getDeviceTransaction(deviceId);
         DeviceTransaction deviceTx;
         try {
@@ -261,7 +289,8 @@ public class CrossConnectImpl221 {
                     deviceTx.commit(Timeouts.DEVICE_WRITE_TIMEOUT, Timeouts.DEVICE_WRITE_TIMEOUT_UNIT);
             try {
                 commit.get();
-                LOG.info("Roadm connection power level successfully set ");
+                LOG.info("Roadm connection {} power level successfully set on {} to {} dBm with control mode {}",
+                    ctName, deviceId, powerValue, mode);
                 return true;
             } catch (InterruptedException | ExecutionException ex) {
                 LOG.warn("Failed to post {}", newRdmConn, ex);

@@ -1,0 +1,25 @@
+module transportpce-deletenode {
+  yang-version 1;
+  namespace "http://org/opendaylight/transportpce/deletenode";
+  prefix org-opendaylight-transportpce-deletenode;
+
+  revision 2023-08-09 {
+    description
+      "Initial revision of deletenodes model";
+  }
+
+  rpc delete-roadm-node {
+    description
+      "This rpc deletes a roadm node";
+    input {
+      leaf node-id {
+        type string;
+      }
+    }
+    output {
+      leaf result {
+        type string;
+      }
+    }
+  }
+}

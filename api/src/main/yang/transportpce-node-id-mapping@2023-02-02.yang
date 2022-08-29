@@ -1,0 +1,52 @@
+module transportpce-node-id-mapping {
+  yang-version 1;
+  namespace "http://org/opendaylight/transportpce/nodeidmapping";
+  prefix "org-opendaylight-transportpce-geolocation";
+
+  import org-openroadm-common-types {
+    prefix org-openroadm-common-types;
+    revision-date 2018-10-19;
+  }
+
+  organization
+    "transportPCE";
+  contact
+    "transportPCE committers - ODL";
+  description
+    "YANG definitions geolocation";
+
+  revision 2023-02-02 {
+    description
+        "initial version";
+  }
+
+  container node-id-mapping {
+    list node-ids {
+      key device-node-id;
+      leaf device-node-id {
+        type org-openroadm-common-types:node-id-type;
+        description
+          "node-id configured on device";
+      }
+      leaf node-id {
+        type string;
+        description
+          "Unique identifier for node in the network";
+      }
+    }
+
+    list reverse-node-ids {
+      key node-id;
+      leaf device-node-id {
+        type org-openroadm-common-types:node-id-type;
+        description
+          "node-id configured on device";
+      }
+      leaf node-id {
+        type string;
+        description
+          "Unique identifier for node in the network";
+      }
+    }
+  }
+}

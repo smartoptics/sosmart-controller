@@ -147,13 +147,9 @@ explicit cross connects are provisioned.
 
   typedef node-id-type {
     type string {
-      length "7..63";
-      pattern '([a-zA-Z][a-zA-Z0-9-]{5,61}[a-zA-Z0-9])' {
+      pattern '([A-Za-z0-9_-]+)' {
         error-message
-          "A node-id must be 7 to 63 characters in length.
-           A node-id can contain letters, numbers, and hyphens.
-           The first character must be a letter.
-           The last character must be a letter or number.";
+          "A node-id can contain letters, numbers, underscores, and hyphens.";
       }
     }
     description

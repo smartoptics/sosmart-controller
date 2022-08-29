@@ -20,7 +20,7 @@ public class SpectrumInformation {
     private Uint32 waveLength;
     private int lowerSpectralSlotNumber;
     private int higherSpectralSlotNumber;
-    private BigDecimal width = GridConstant.WIDTH_40;
+    private BigDecimal width = GridConstant.WIDTH_92;
     private BigDecimal centerFrequency;
     private BigDecimal minFrequency;
     private BigDecimal maxFrequency;

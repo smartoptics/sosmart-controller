@@ -96,6 +96,7 @@ public class PceListenerImpl implements TransportpcePceListener {
         }
         if (servicePathRpcResult.getPathDescription() == null) {
             LOG.error("'PathDescription' parameter is null ");
+            setInput(null);
             return;
         }
         PathDescription pathDescription =
@@ -106,6 +107,7 @@ public class PceListenerImpl implements TransportpcePceListener {
         LOG.info("PathDescription gets : {}", pathDescription);
         if (serviceFeasiblity) {
             LOG.warn("service-feasibility-check RPC ");
+            setInput(null);
             return;
         }
         if (input == null) {
@@ -146,6 +148,7 @@ public class PceListenerImpl implements TransportpcePceListener {
             ModelMappingUtils.createServiceImplementationRequest(input, pathDescription);
         LOG.info("Sending serviceImplementation request : {}", serviceImplementationRequest);
         this.rendererServiceOperations.serviceImplementation(serviceImplementationRequest);
+        setInput(null);
     }
 
     /**
@@ -166,6 +169,7 @@ public class PceListenerImpl implements TransportpcePceListener {
                         .setResponseFailed("PCE path computation failed !")
                         .setOperationalState(State.Degraded).build();
                 sendNbiNotification(nbiNotification);
+                setInput(null);
                 return false;
             case Pending:
                 LOG.warn("PCE path computation returned a Pending RpcStatusEx code!");
@@ -231,6 +235,7 @@ public class PceListenerImpl implements TransportpcePceListener {
                     .setMessage("ServiceDelete request failed ...")
                     .setOperationalState(service.getOperationalState())
                     .build());
+            setInput(null);
             return;
         }
         LOG.info("PCE cancel resource done OK !");
@@ -270,6 +275,8 @@ public class PceListenerImpl implements TransportpcePceListener {
             LOG.info("cancel resource reserve done, relaunching PCE path computation ...");
             this.pceServiceWrapper.performPCE(input.getServiceCreateInput(), true);
             this.serviceReconfigure = false;
+        } else {
+            setInput(null);
         }
     }
 

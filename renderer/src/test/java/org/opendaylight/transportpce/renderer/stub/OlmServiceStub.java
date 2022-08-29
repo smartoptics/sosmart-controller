@@ -46,8 +46,10 @@ public class OlmServiceStub implements TransportpceOlmService {
 
     @Override public ListenableFuture<RpcResult<ServicePowerTurndownOutput>> servicePowerTurndown(
         ServicePowerTurndownInput input) {
+        /*return RpcResultBuilder.success((new ServicePowerTurndownOutputBuilder())
+                .setResult("Failed").build()).buildFuture();*/
         return RpcResultBuilder.success((new ServicePowerTurndownOutputBuilder())
-                .setResult("Success").build()).buildFuture();
+            .setResult("Success").build()).buildFuture();
     }
 
     @Override public ListenableFuture<RpcResult<CalculateSpanlossBaseOutput>> calculateSpanlossBase(

@@ -91,6 +91,13 @@ public final class ModelMappingUtils {
                     .valueOf(GridUtils
                         .getHigherSpectralIndexFromFrequency(atoZDirection.getAToZMaxFrequency().getValue())));
             }
+            if (atoZDirection.getAToZMinFrequency() != null && atoZDirection.getAToZMaxFrequency() != null) {
+                int scale = GridConstant.FIXED_GRID_FREQUENCY_PRECISION;
+                olmSetupBldr.setCenterFreq(GridUtils.getCentralFrequencyWithPrecision(
+                    atoZDirection.getAToZMinFrequency().getValue().decimalValue(),
+                    atoZDirection.getAToZMaxFrequency().getValue().decimalValue(),
+                    scale));
+            }
             // Set the MC-width for the OLM
             olmSetupBldr.setMcWidth(new FrequencyGHz(Decimal64.valueOf(
                     atoZDirection.getAToZMaxFrequency().getValue().decimalValue()
@@ -139,7 +146,7 @@ public final class ModelMappingUtils {
             .setServiceName(serviceName)
             .setOperation(operation)
             .setNodes(nodeLists.getRendererNodeList())
-            .setNmcWidth(new FrequencyGHz(Decimal64.valueOf(GridConstant.WIDTH_40)))
+            .setNmcWidth(new FrequencyGHz(Decimal64.valueOf(GridConstant.WIDTH_92)))
             .setMcWidth(new FrequencyGHz(Decimal64.valueOf(
                     pathDescription.getAToZDirection().getAToZMaxFrequency().getValue().decimalValue()
                     .subtract(pathDescription.getAToZDirection().getAToZMinFrequency().getValue().decimalValue()))));
@@ -197,7 +204,7 @@ public final class ModelMappingUtils {
             .setOperation(operation)
             .setServiceName(serviceName)
             .setNodes(nodeLists.getRendererNodeList())
-            .setNmcWidth(new FrequencyGHz(Decimal64.valueOf(GridConstant.WIDTH_40)))
+            .setNmcWidth(new FrequencyGHz(Decimal64.valueOf(GridConstant.WIDTH_92)))
             .setMcWidth(new FrequencyGHz(Decimal64.valueOf(
                     pathDescription.getAToZDirection().getAToZMaxFrequency().getValue().decimalValue()
                     .subtract(pathDescription.getAToZDirection().getAToZMinFrequency().getValue().decimalValue()))));

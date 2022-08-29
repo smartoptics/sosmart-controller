@@ -44,14 +44,15 @@ public class GnpyConsumerImpl implements GnpyConsumer {
 
     @Override
     public boolean isAvailable() {
-        try {
+        /* try {
             api.getStatus();
             LOG.info("GNPy is available");
             return true;
         } catch (WebApplicationException | ProcessingException e) {
             LOG.info("GNPy is not available ", e);
             return false;
-        }
+        } */
+        return false;
     }
 
     @Override

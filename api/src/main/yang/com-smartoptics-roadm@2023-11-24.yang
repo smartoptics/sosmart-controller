@@ -1,0 +1,103 @@
+module com-smartoptics-roadm {
+
+  namespace "http://smartoptics.com/ns/com-smartoptics-roadm";
+  prefix "com-smartoptics-roadm";
+
+  /* import ietf-yang-types {
+    prefix yang;
+  }
+
+  import tailf-common {
+    prefix tailf;
+  } */
+
+  organization "Smartoptics";
+  contact "info@smartoptics.com";
+
+  revision 2023-11-24 {
+    description
+     "This revision adds the following new data types:
+      - peak
+      - raw peak";
+    reference
+     "Smartoptics ROADM YANG Module";
+  }
+
+  revision 2021-08-23 {
+    description
+      "Initial revision.";
+    reference
+      "Smartoptics ROADM YANG Module";
+  }
+
+  container com-smartoptics-device {
+    grouping channel-information {
+      description
+        "Channel information";
+      // tailf:callpoint channel-information-callback {}
+      leaf channel-power {
+        type decimal64{
+          fraction-digits 2;
+        }
+        default 0.0;
+      }
+      leaf center-frequency {
+        type uint64;
+      }
+      leaf width {
+        type decimal64{
+          fraction-digits 2;
+        }
+        default 100.0;
+      }
+      leaf traffic-format {
+        type string;
+      }
+      leaf wss-attenuation {
+        type decimal64{
+          fraction-digits 2;
+        }
+        default 0.0;
+      }
+      leaf peak {
+        type boolean;
+        default false;
+      }
+      leaf raw-peak {
+        type boolean;
+        default false;
+      }
+    }
+
+    list degree {
+      config false;
+      key "degree-number";
+      leaf degree-number {
+        type uint32;
+      }
+      // tailf:callpoint connected-degrees-callback {}
+      container oms {
+        container fiber {
+          leaf length {
+            // tailf:callpoint fiber-length-callback {}
+            type decimal64{
+                fraction-digits 2;
+            }
+          }
+        }
+      }
+      container booster {
+        list channel {
+          key "center-frequency";
+          uses channel-information;
+        }
+      }
+      container preamp {
+        list channel {
+          key "center-frequency";
+          uses channel-information;
+        }
+      }
+    }
+  }
+}

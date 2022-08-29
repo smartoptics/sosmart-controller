@@ -8,14 +8,14 @@
 package org.opendaylight.transportpce.networkmodel;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.util.concurrent.ListenableFuture;
-import java.util.ArrayList;
+// import com.google.common.util.concurrent.ListenableFuture;
+// import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
+// import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
+// import java.util.concurrent.ExecutionException;
 import javax.annotation.Nonnull;
 import org.opendaylight.mdsal.binding.api.DataBroker;
 import org.opendaylight.mdsal.binding.api.DataObjectModification;
@@ -23,27 +23,29 @@ import org.opendaylight.mdsal.binding.api.DataTreeChangeListener;
 import org.opendaylight.mdsal.binding.api.DataTreeModification;
 import org.opendaylight.mdsal.binding.api.MountPoint;
 import org.opendaylight.mdsal.binding.api.NotificationService;
-import org.opendaylight.mdsal.binding.api.RpcConsumerRegistry;
-import org.opendaylight.mdsal.common.api.LogicalDatastoreType;
+// import org.opendaylight.mdsal.binding.api.RpcConsumerRegistry;
+// import org.opendaylight.mdsal.common.api.LogicalDatastoreType;
 import org.opendaylight.transportpce.common.StringConstants;
-import org.opendaylight.transportpce.common.Timeouts;
+// import org.opendaylight.transportpce.common.Timeouts;
 import org.opendaylight.transportpce.common.device.DeviceTransactionManager;
 import org.opendaylight.transportpce.common.mapping.PortMapping;
 import org.opendaylight.transportpce.networkmodel.dto.NodeRegistration;
 import org.opendaylight.transportpce.networkmodel.service.NetworkModelService;
-import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netconf.notification._1._0.rev080714.CreateSubscriptionInputBuilder;
-import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netconf.notification._1._0.rev080714.CreateSubscriptionOutput;
-import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netconf.notification._1._0.rev080714.NotificationsService;
-import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netconf.notification._1._0.rev080714.StreamNameType;
-import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netmod.notification.rev080714.Netconf;
-import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netmod.notification.rev080714.netconf.Streams;
-import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netmod.notification.rev080714.netconf.streams.Stream;
+// import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netconf.notification._1._0.rev080714.
+// CreateSubscriptionInputBuilder;
+// import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netconf.notification._1._0.rev080714.
+// CreateSubscriptionOutput;
+// import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netconf.notification._1._0.rev080714.NotificationsService;
+// import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netconf.notification._1._0.rev080714.StreamNameType;
+// import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netmod.notification.rev080714.Netconf;
+// import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netmod.notification.rev080714.netconf.Streams;
+// import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.netmod.notification.rev080714.netconf.streams.Stream;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.netconf.node.topology.rev150114.NetconfNode;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.netconf.node.topology.rev150114.NetconfNodeConnectionStatus.ConnectionStatus;
 import org.opendaylight.yang.gen.v1.urn.opendaylight.netconf.node.topology.rev150114.netconf.node.connection.status.available.capabilities.AvailableCapability;
 import org.opendaylight.yang.gen.v1.urn.tbd.params.xml.ns.yang.network.topology.rev131021.network.topology.topology.Node;
-import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
-import org.opendaylight.yangtools.yang.common.RpcResult;
+// import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
+// import org.opendaylight.yangtools.yang.common.RpcResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,10 +82,8 @@ public class NetConfTopologyListener implements DataTreeChangeListener<Node> {
             NetconfNode netconfNodeBefore = rootNode.getDataBefore().augmentation(NetconfNode.class);
             switch (rootNode.getModificationType()) {
                 case DELETE:
-                    if (this.networkModelService.deleteOpenRoadmnode(nodeId)) {
-                        onDeviceDisConnected(nodeId);
-                        LOG.info("Device {} correctly disconnected from controller", nodeId);
-                    }
+                    LOG.info("Device {} removed from Netconf topology", nodeId);
+                    onDeviceDisConnected(nodeId);
                     break;
                 case WRITE:
                     NetconfNode netconfNodeAfter = rootNode.getDataAfter().augmentation(NetconfNode.class);
@@ -135,7 +135,7 @@ public class NetConfTopologyListener implements DataTreeChangeListener<Node> {
         nodeRegistration.registerListeners();
         registrations.put(nodeId, nodeRegistration);
 
-        subscribeStream(mountPoint, nodeId);
+        // subscribeStream(mountPoint, nodeId);
     }
 
     private void onDeviceDisConnected(final String nodeId) {
@@ -143,7 +143,7 @@ public class NetConfTopologyListener implements DataTreeChangeListener<Node> {
         this.registrations.remove(nodeId).unregisterListeners();
     }
 
-    private boolean subscribeStream(MountPoint mountPoint, String nodeId) {
+    /* private boolean subscribeStream(MountPoint mountPoint, String nodeId) {
         final Optional<RpcConsumerRegistry> service = mountPoint.getService(RpcConsumerRegistry.class);
         if (service.isEmpty()) {
             return false;
@@ -164,7 +164,7 @@ public class NetConfTopologyListener implements DataTreeChangeListener<Node> {
             }
         }
         return false;
-    }
+    } */
 
     @VisibleForTesting
     public NetConfTopologyListener(
@@ -180,7 +180,7 @@ public class NetConfTopologyListener implements DataTreeChangeListener<Node> {
         this.registrations = registrations;
     }
 
-    private boolean checkSupportedStream(
+    /* private boolean checkSupportedStream(
             String streamName,
             ListenableFuture<RpcResult<CreateSubscriptionOutput>> subscription) {
         boolean subscriptionSuccessful = false;
@@ -192,9 +192,9 @@ public class NetConfTopologyListener implements DataTreeChangeListener<Node> {
             LOG.error("Error during subscription to stream {}", streamName, e);
         }
         return subscriptionSuccessful;
-    }
+    } */
 
-    private List<String> getSupportedStream(String nodeId) {
+    /* private List<String> getSupportedStream(String nodeId) {
         InstanceIdentifier<Streams> streamsIID = InstanceIdentifier.create(Netconf.class).child(Streams.class);
         Optional<Streams> ordmInfoObject =
                 deviceTransactionManager.getDataFromDevice(nodeId, LogicalDatastoreType.OPERATIONAL, streamsIID,
@@ -219,6 +219,6 @@ public class NetConfTopologyListener implements DataTreeChangeListener<Node> {
             streams.isEmpty()
                 ? List.of("OPENROADM","NETCONF")
                 : streams;
-    }
+    } */
 
 }

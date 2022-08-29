@@ -22,8 +22,10 @@ import org.opendaylight.transportpce.common.Timeouts;
 import org.opendaylight.transportpce.common.crossconnect.CrossConnect;
 import org.opendaylight.transportpce.common.device.DeviceTransaction;
 import org.opendaylight.transportpce.common.device.DeviceTransactionManager;
+import org.opendaylight.yang.gen.v1.http.org.openroadm.common.types.rev181019.LineAmplifierControlMode;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.common.types.rev181019.OpticalControlMode;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.common.types.rev181019.PowerDBm;
+import org.opendaylight.yang.gen.v1.http.org.openroadm.common.types.rev181019.RatioDB;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.OrgOpenroadmDeviceData;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.pack.Ports;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.pack.PortsKey;
@@ -33,6 +35,9 @@ import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.interfac
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.interfaces.grp.InterfaceBuilder;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.interfaces.grp.InterfaceKey;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.OrgOpenroadmDevice;
+import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.org.openroadm.device.LineAmplifier;
+import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.org.openroadm.device.LineAmplifierBuilder;
+import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.org.openroadm.device.LineAmplifierKey;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.org.openroadm.device.RoadmConnections;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.org.openroadm.device.RoadmConnectionsBuilder;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.org.openroadm.device.RoadmConnectionsKey;
@@ -41,6 +46,7 @@ import org.opendaylight.yang.gen.v1.http.org.openroadm.optical.channel.interface
 import org.opendaylight.yang.gen.v1.http.org.openroadm.optical.channel.interfaces.rev181019.och.container.OchBuilder;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.opendaylight.yangtools.yang.common.Decimal64;
+import org.opendaylight.yangtools.yang.common.Uint8;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -265,6 +271,45 @@ public final class PowerMgmtVersion221 {
             }
         } else {
             LOG.warn("Roadm-Connection is null in set power level ({})", connectionNumber);
+        }
+        return false;
+    }
+
+    public static boolean setIlaTargetGain(String deviceId, Uint8 ampNumber, LineAmplifierControlMode mode,
+            Decimal64 targetGain, DeviceTransactionManager deviceTransactionManager) {
+        LOG.info("Setting target gain for ila {}, amp-number {}", deviceId, ampNumber);
+        LineAmplifier lineAmplifier = new LineAmplifierBuilder()
+                .setAmpNumber(ampNumber)
+                .setControlMode(mode)
+                .setTargetGain(new RatioDB(targetGain))
+                .build();
+        Future<Optional<DeviceTransaction>> deviceTxFuture = deviceTransactionManager.getDeviceTransaction(deviceId);
+        DeviceTransaction deviceTx;
+        try {
+            Optional<DeviceTransaction> deviceTxOpt = deviceTxFuture.get();
+            if (deviceTxOpt.isPresent()) {
+                deviceTx = deviceTxOpt.get();
+            } else {
+                LOG.error("Transaction for device {} was not found during gain setup for ILA Node:", deviceId);
+                return false;
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            LOG.error("Unable to get transaction for device {} during gain setup", deviceId, e);
+            return false;
+        }
+        InstanceIdentifier<LineAmplifier> ampIID = InstanceIdentifier
+            .builderOfInherited(OrgOpenroadmDeviceData.class, OrgOpenroadmDevice.class)
+            .child(LineAmplifier.class, new LineAmplifierKey(ampNumber))
+            .build();
+        deviceTx.merge(LogicalDatastoreType.CONFIGURATION, ampIID, lineAmplifier);
+        FluentFuture<? extends @NonNull CommitInfo> commit =
+            deviceTx.commit(Timeouts.DEVICE_WRITE_TIMEOUT, Timeouts.DEVICE_WRITE_TIMEOUT_UNIT);
+        try {
+            commit.get();
+            LOG.info("Target Gain update is committed");
+            return true;
+        } catch (InterruptedException | ExecutionException e) {
+            LOG.error("Setting Target Gain failed: ", e);
         }
         return false;
     }

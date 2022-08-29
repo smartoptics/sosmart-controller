@@ -795,7 +795,7 @@ public class PceCalculation {
                 return mcCapabitility.getSlotWidthGranularity().getValue().decimalValue();
             }
         }
-        return GridConstant.SLOT_WIDTH_50;
+        return GridConstant.SLOT_WIDTH_100;
     }
 
     /**
@@ -821,6 +821,6 @@ public class PceCalculation {
                 return mcCapabitility.getCenterFreqGranularity().getValue().decimalValue();
             }
         }
-        return GridConstant.SLOT_WIDTH_50;
+        return GridConstant.SLOT_WIDTH_100;
     }
 }

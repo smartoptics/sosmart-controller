@@ -26,6 +26,8 @@ import org.opendaylight.transportpce.common.network.NetworkTransactionService;
 import org.opendaylight.transportpce.networkmodel.listeners.PortMappingListener;
 import org.opendaylight.transportpce.networkmodel.service.FrequenciesService;
 import org.opendaylight.transportpce.test.AbstractTest;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.createnode.rev221006.TransportpceCreatenodeService;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.deletenode.rev230809.TransportpceDeletenodeService;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkutils.rev220630.TransportpceNetworkutilsService;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -36,6 +38,10 @@ public class NetworkModelProviderTest extends AbstractTest {
     RpcProviderService rpcProviderService;
     @Mock
     TransportpceNetworkutilsService networkutilsService;
+    @Mock
+    TransportpceCreatenodeService createnodeService;
+    @Mock
+    TransportpceDeletenodeService deletenodeService;
     @Mock
     NetConfTopologyListener topologyListener;
     @Mock
@@ -49,8 +55,8 @@ public class NetworkModelProviderTest extends AbstractTest {
     @Test
     public void networkmodelProviderInitTest() {
         NetworkModelProvider provider = new NetworkModelProvider(networkTransactionService, getDataBroker(),
-            rpcProviderService, networkutilsService, topologyListener, notificationService,
-            frequenciesService, portMappingListener);
+            rpcProviderService, networkutilsService, createnodeService, deletenodeService, topologyListener,
+            notificationService, frequenciesService, portMappingListener);
         Answer<FluentFuture<CommitInfo>> answer = new Answer<FluentFuture<CommitInfo>>() {
 
             @Override

@@ -27,6 +27,7 @@ import org.opendaylight.transportpce.common.crossconnect.CrossConnect;
 import org.opendaylight.transportpce.common.device.DeviceTransactionManager;
 import org.opendaylight.transportpce.common.device.DeviceTransactionManagerImpl;
 import org.opendaylight.transportpce.common.mapping.PortMapping;
+import org.opendaylight.transportpce.renderer.provisiondevice.notification.NotificationSender;
 import org.opendaylight.transportpce.renderer.stub.OlmServiceStub;
 import org.opendaylight.transportpce.renderer.utils.NotificationPublishServiceMock;
 import org.opendaylight.transportpce.renderer.utils.ServiceDeleteDataUtils;
@@ -34,6 +35,7 @@ import org.opendaylight.transportpce.renderer.utils.TransactionUtils;
 import org.opendaylight.transportpce.test.AbstractTest;
 import org.opendaylight.transportpce.test.stub.MountPointServiceStub;
 import org.opendaylight.transportpce.test.stub.MountPointStub;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.device.renderer.rev211004.ServicePathOutput;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.device.renderer.rev211004.ServicePathOutputBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.olm.rev210618.ServicePowerTurndownOutputBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.olm.rev210618.TransportpceOlmService;
@@ -78,10 +80,17 @@ public class RendererServiceOperationsImplDeleteTest extends AbstractTest {
     public void setUp() {
         setMountPoint(new MountPointStub(getDataBroker()));
         this.olmService = new OlmServiceStub();
+
         this.olmService = Mockito.spy(this.olmService);
         NotificationPublishService notificationPublishService = new NotificationPublishServiceMock();
+        ServicePathOutput servicePathOutput = Mockito.mock(ServicePathOutput.class);
+        Mockito.when(servicePathOutput.getSuccess()).thenReturn(false);
+
+        Mockito.when(deviceRenderer.deleteServicePath(Mockito.any())).thenReturn(servicePathOutput);
+
         this.rendererServiceOperations =  new RendererServiceOperationsImpl(deviceRenderer,
-            otnDeviceRendererService, olmService, getDataBroker(), notificationPublishService, portMapping);
+            otnDeviceRendererService, olmService, getDataBroker(), portMapping,
+            new NotificationSender(notificationPublishService));
     }
 
 
@@ -113,6 +122,7 @@ public class RendererServiceOperationsImplDeleteTest extends AbstractTest {
             .thenReturn(new ServicePathOutputBuilder().setSuccess(true).build());
         ServiceDeleteOutput serviceDeleteOutput
                 = this.rendererServiceOperations.serviceDelete(serviceDeleteInputBuilder.build(), service).get();
+
         Assert.assertEquals(ResponseCodes.RESPONSE_OK,
             serviceDeleteOutput.getConfigurationResponseCommon().getResponseCode());
     }
@@ -138,7 +148,7 @@ public class RendererServiceOperationsImplDeleteTest extends AbstractTest {
             .setResult("Failed").build()).buildFuture()).when(this.olmService).servicePowerTurndown(Mockito.any());
         ServiceDeleteOutput serviceDeleteOutput
                 = this.rendererServiceOperations.serviceDelete(serviceDeleteInputBuilder.build(), service).get();
-        Assert.assertEquals(ResponseCodes.RESPONSE_FAILED,
+        Assert.assertEquals(ResponseCodes.RESPONSE_OK,
             serviceDeleteOutput.getConfigurationResponseCommon().getResponseCode());
         Mockito.verify(this.crossConnect, Mockito.times(0))
                 .deleteCrossConnect(Mockito.any(), Mockito.any(), Mockito.eq(false));
@@ -174,7 +184,23 @@ public class RendererServiceOperationsImplDeleteTest extends AbstractTest {
         ListenableFuture<ServiceDeleteOutput> serviceDeleteOutput
                 = this.rendererServiceOperations.serviceDelete(serviceDeleteInputBuilder.build(), service);
         ServiceDeleteOutput output = serviceDeleteOutput.get();
-        Assert.assertEquals(ResponseCodes.RESPONSE_FAILED,
+
+        /*
+        if (FAILED.equals(
+            olmPowerTurndown(servicePathInputDataAtoZ)
+                .getResult())) {
+            LOG.error("Service power turndown failed on A-to-Z path for service {}!", serviceName);
+            //These two lines where removed in RendererServiceOperationsImpl.manageServicePathDeletion(...)
+            sendNotifications(
+                ServicePathNotificationTypes.ServiceDelete,
+                serviceName,
+                RpcStatusEx.Failed,
+                "Service power turndown failed on A-to-Z path for service");
+            return false;
+        }*/
+
+
+        Assert.assertEquals(ResponseCodes.RESPONSE_OK,
                 output.getConfigurationResponseCommon().getResponseCode());
         Mockito.verify(this.crossConnect, Mockito.times(0)).deleteCrossConnect(Mockito.eq("node1"), Mockito.any(),
             Mockito.eq(false));
@@ -214,7 +240,23 @@ public class RendererServiceOperationsImplDeleteTest extends AbstractTest {
             .thenReturn(null);
         ServiceDeleteOutput serviceDeleteOutput =
                 this.rendererServiceOperations.serviceDelete(serviceDeleteInputBuilder.build(), service).get();
-        Assert.assertEquals(ResponseCodes.RESPONSE_FAILED,
+
+        /*
+            if (FAILED.equals(
+                    olmPowerTurndown(servicePathInputDataZtoA)
+                        .getResult())) {
+                LOG.error("Service power turndown failed on Z-to-A path for service {}!", serviceName);
+                //these two lines had been removed
+                sendNotifications(
+                    ServicePathNotificationTypes.ServiceDelete,
+                    serviceName,
+                    RpcStatusEx.Failed,
+                    "Service power turndown failed on Z-to-A path for service");
+                return false;
+            }
+         */
+
+        Assert.assertEquals(ResponseCodes.RESPONSE_OK,
             serviceDeleteOutput.getConfigurationResponseCommon().getResponseCode());
         Mockito.verify(this.olmService, Mockito.times(2)).servicePowerTurndown(Mockito.any());
         Mockito.verify(this.crossConnect, Mockito.times(0)).deleteCrossConnect(Mockito.eq("node1"), Mockito.any(),

@@ -23,8 +23,8 @@ import org.opendaylight.transportpce.common.mapping.PortMapping;
 import org.opendaylight.transportpce.common.mapping.PortMappingVersion221;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.mapping.Mapping;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.OrgOpenroadmDeviceData;
-import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.pack.Ports;
-import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.pack.PortsKey;
+//import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.pack.Ports;
+//import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.pack.PortsKey;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.packs.CircuitPacks;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.packs.CircuitPacksBuilder;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.circuit.packs.CircuitPacksKey;
@@ -32,8 +32,8 @@ import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.interfac
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.interfaces.grp.InterfaceBuilder;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.interfaces.grp.InterfaceKey;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.org.openroadm.device.container.OrgOpenroadmDevice;
-import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.port.Interfaces;
-import org.opendaylight.yang.gen.v1.http.org.openroadm.equipment.states.types.rev171215.AdminStates;
+//import org.opendaylight.yang.gen.v1.http.org.openroadm.device.rev181019.port.Interfaces;
+//import org.opendaylight.yang.gen.v1.http.org.openroadm.equipment.states.types.rev171215.AdminStates;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.equipment.states.types.rev171215.States;
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.slf4j.Logger;
@@ -82,7 +82,7 @@ public class OpenRoadmInterfacesImpl221 {
         // TODO: instead of using this infinite loop coupled with this timeout,
         // it would be better to use a notification mechanism from the device to be advertised
         // that the new created interface is present in the device circuit-pack/port
-        final Thread current = Thread.currentThread();
+        /* final Thread current = Thread.currentThread();
         Thread timer = new Thread() {
             public void run() {
                 try {
@@ -92,13 +92,13 @@ public class OpenRoadmInterfacesImpl221 {
                     LOG.error("Timeout before the new created interface appears on the deivce circuit-pack port", e);
                 }
             }
-        };
+        }; */
         try {
             txSubmitFuture.get();
             LOG.info("Successfully posted/deleted interface {} on node {}", ifBuilder.getName(), nodeId);
             // this check is not needed during the delete operation
             // during the delete operation, ifBuilder does not contain supporting-cp and supporting-port
-            if (ifBuilder.getSupportingCircuitPackName() != null && ifBuilder.getSupportingPort() != null) {
+            /* if (ifBuilder.getSupportingCircuitPackName() != null && ifBuilder.getSupportingPort() != null) {
                 boolean devicePortIsUptodated = false;
                 while (!devicePortIsUptodated) {
                     devicePortIsUptodated = checkIfDevicePortIsUpdatedWithInterface(nodeId, ifBuilder);
@@ -106,7 +106,7 @@ public class OpenRoadmInterfacesImpl221 {
                 LOG.info("{} - {} - interface {} updated on port {}", nodeId, ifBuilder.getSupportingCircuitPackName(),
                     ifBuilder.getName(), ifBuilder.getSupportingPort());
             }
-            timer.interrupt();
+            timer.interrupt(); */
         } catch (InterruptedException | ExecutionException e) {
             throw new OpenRoadmInterfaceException(String.format("Failed to post interface %s on node %s!", ifBuilder
                 .getName(), nodeId), e);
@@ -134,7 +134,7 @@ public class OpenRoadmInterfacesImpl221 {
                 interfaceName, nodeId), e);
         }
         if (intf2DeleteOpt.isPresent()) {
-            Interface intf2Delete = intf2DeleteOpt.get();
+            /* Interface intf2Delete = intf2DeleteOpt.get();
             // State admin state to out of service
             InterfaceBuilder ifBuilder = new InterfaceBuilder()
                 .setAdministrativeState(AdminStates.OutOfService)
@@ -146,7 +146,7 @@ public class OpenRoadmInterfacesImpl221 {
             } catch (OpenRoadmInterfaceException ex) {
                 throw new OpenRoadmInterfaceException(String.format("Failed to set state of interface %s to %s while"
                     + " deleting it!", interfaceName, AdminStates.OutOfService), ex);
-            }
+            } */
 
             InstanceIdentifier<Interface> interfacesIID = InstanceIdentifier
                 .builderOfInherited(OrgOpenroadmDeviceData.class, OrgOpenroadmDevice.class)
@@ -180,6 +180,7 @@ public class OpenRoadmInterfacesImpl221 {
                     interfaceName, nodeId), e);
             }
             // change the equipment state on circuit pack if xpdr node
+            Interface intf2Delete = intf2DeleteOpt.get();
             if (intf2Delete.getName().contains(StringConstants.CLIENT_TOKEN) || intf2Delete.getName().contains(
                 StringConstants.NETWORK_TOKEN)) {
                 postEquipmentState(nodeId, intf2Delete.getSupportingCircuitPackName(), false);
@@ -267,7 +268,7 @@ public class OpenRoadmInterfacesImpl221 {
         }
     }
 
-    private boolean checkIfDevicePortIsUpdatedWithInterface(String nodeId, InterfaceBuilder ifBuilder) {
+    /* private boolean checkIfDevicePortIsUpdatedWithInterface(String nodeId, InterfaceBuilder ifBuilder) {
         InstanceIdentifier<Ports> portIID = InstanceIdentifier
             .builderOfInherited(OrgOpenroadmDeviceData.class, OrgOpenroadmDevice.class)
             .child(CircuitPacks.class, new CircuitPacksKey(ifBuilder.getSupportingCircuitPackName()))
@@ -284,5 +285,5 @@ public class OpenRoadmInterfacesImpl221 {
             }
         }
         return false;
-    }
+    } */
 }

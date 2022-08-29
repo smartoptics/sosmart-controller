@@ -33,6 +33,11 @@ import org.opendaylight.transportpce.networkmodel.util.OpenRoadmNetwork;
 import org.opendaylight.transportpce.networkmodel.util.OpenRoadmOtnTopology;
 import org.opendaylight.transportpce.networkmodel.util.OpenRoadmTopology;
 import org.opendaylight.transportpce.networkmodel.util.TopologyUtils;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.MountedNodes;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.MountedNodesBuilder;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.mounted.nodes.Nodes;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.mounted.nodes.NodesBuilder;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.mountednodes.rev230620.mounted.nodes.NodesKey;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkmodel.rev201116.TopologyUpdateResult;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkmodel.rev201116.TopologyUpdateResultBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkmodel.rev201116.topology.update.result.TopologyChanges;
@@ -54,6 +59,7 @@ import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.network.rev
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.network.rev180226.networks.NetworkKey;
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.network.rev180226.networks.network.Node;
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.network.rev180226.networks.network.NodeKey;
+import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.network.rev180226.networks.network.node.SupportingNode;
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.network.topology.rev180226.LinkId;
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.network.topology.rev180226.Network1;
 import org.opendaylight.yang.gen.v1.urn.ietf.params.xml.ns.yang.ietf.network.topology.rev180226.Node1;
@@ -76,7 +82,6 @@ public class NetworkModelServiceImpl implements NetworkModelService {
     private NetworkTransactionService networkTransactionService;
     private final R2RLinkDiscovery linkDiscovery;
     private final PortMapping portMapping;
-    private Map<String, TopologyShard> topologyShardMountedDevice;
     private Map<String, TopologyShard> otnTopologyShardMountedDevice;
     // Variables for creating and sending topology update notification
     private final NotificationPublishService notificationPublishService;
@@ -90,7 +95,6 @@ public class NetworkModelServiceImpl implements NetworkModelService {
         this.networkTransactionService = networkTransactionService;
         this.linkDiscovery = linkDiscovery;
         this.portMapping = portMapping;
-        this.topologyShardMountedDevice = new HashMap<String, TopologyShard>();
         this.otnTopologyShardMountedDevice = new HashMap<String, TopologyShard>();
         this.notificationPublishService = notificationPublishService;
         this.topologyChanges = new HashMap<TopologyChangesKey, TopologyChanges>();
@@ -104,21 +108,33 @@ public class NetworkModelServiceImpl implements NetworkModelService {
     }
 
     @Override
-    public void createOpenRoadmNode(String nodeId, String openRoadmVersion) {
+    public boolean createOpenRoadmNode(String nodeId, String openRoadmVersion) {
+        return createOpenRoadmNode(nodeId, openRoadmVersion, true);
+    }
+
+    @Override
+    public boolean createOpenRoadmNode(String nodeId, String openRoadmVersion, boolean reconnect) {
         try {
             LOG.info("createOpenROADMNode: {} ", nodeId);
 
+            InstanceIdentifier<Nodes> iiNodes = InstanceIdentifier.builder(MountedNodes.class)
+                .child(Nodes.class, new NodesKey(nodeId)).build();
+            Optional<Nodes> nodesOptional =
+                networkTransactionService.read(LogicalDatastoreType.CONFIGURATION, iiNodes).get();
             boolean firstMount;
             if (portMapping.getNode(nodeId) == null) {
                 firstMount = true;
+            } else if (reconnect && nodesOptional.isPresent()) {
+                LOG.info("{} already exists in portmapping but was reconnected, skipping node creation", nodeId);
+                return true;
             } else {
-                LOG.info("{} already exists in portmapping but was reconnected", nodeId);
+                LOG.info("{} already exists in portmapping but update or restore requested", nodeId);
                 firstMount = false;
             }
 
             if (!portMapping.createMappingData(nodeId, openRoadmVersion)) {
                 LOG.warn("Could not generate port mapping for {} skipping network model creation", nodeId);
-                return;
+                return false;
             }
             NodeInfo nodeInfo = portMapping.getNode(nodeId).getNodeInfo();
             // node creation in clli-network
@@ -144,7 +160,6 @@ public class NetworkModelServiceImpl implements NetworkModelService {
             TopologyShard topologyShard = OpenRoadmTopology.createTopologyShard(portMapping.getNode(nodeId),
                                                                                 firstMount);
             if (topologyShard != null) {
-                this.topologyShardMountedDevice.put(nodeId, topologyShard);
                 for (Node openRoadmTopologyNode : topologyShard.getNodes()) {
                     LOG.info("creating node {} in {}", openRoadmTopologyNode.getNodeId().getValue(),
                         NetworkUtils.OVERLAY_NETWORK_ID);
@@ -173,15 +188,31 @@ public class NetworkModelServiceImpl implements NetworkModelService {
             if (nodeInfo.getNodeType().getIntValue() == 2 && (nodeInfo.getOpenroadmVersion().getIntValue() != 1)) {
                 createOpenRoadmOtnNode(nodeId);
             }
+
+            // node creation in mounted-nodes
+            Nodes nodes = new NodesBuilder().withKey(new NodesKey(nodeId))
+                .setNodeId(nodeId)
+                .build();
+            Map<NodesKey,Nodes> nodesList = new HashMap<>();
+            nodesList.put(nodes.key(),nodes);
+            MountedNodes mountedNodes = new MountedNodesBuilder().setNodes(nodesList).build();
+            InstanceIdentifier<MountedNodes> iimountedNodes = InstanceIdentifier.builder(MountedNodes.class)
+                .build();
+            LOG.info("creating node in mounted nodes list");
+            networkTransactionService.merge(LogicalDatastoreType.CONFIGURATION, iimountedNodes,
+                mountedNodes);
+
             networkTransactionService.commit().get();
             // neighbour links through LLDP
-            if (nodeInfo.getNodeType().getIntValue() == 1) {
+            if (nodeInfo.getNodeType().getIntValue() == 1 || nodeInfo.getNodeType().getIntValue() == 3) {
                 this.linkDiscovery.readLLDP(new NodeId(nodeId), openRoadmVersion);
             }
             LOG.info("all nodes and links created");
         } catch (InterruptedException | ExecutionException e) {
             LOG.error("ERROR: ", e);
+            return false;
         }
+        return true;
     }
 
     @Override
@@ -205,6 +236,25 @@ public class NetworkModelServiceImpl implements NetworkModelService {
             if (!this.portMapping.isNodeExist(nodeId)) {
                 return false;
             }
+            List<Node> allNodes = new ArrayList<>();
+            List<Link> allLinks = new ArrayList<>();
+            InstanceIdentifier<Network> nwIID = InstanceIdentifier.builder(Networks.class)
+                .child(Network.class, new NetworkKey(new NetworkId(NetworkUtils.OVERLAY_NETWORK_ID)))
+                .build();
+            Optional<Network> nwOptional =
+                networkTransactionService.read(LogicalDatastoreType.CONFIGURATION, nwIID).get();
+            if (nwOptional.isPresent()) {
+                Network nw = nwOptional.get();
+                Network1 nw1 = nw.augmentation(Network1.class);
+                allNodes = nw.nonnullNode().values().stream().collect(Collectors.toList());
+                allLinks = nw1.nonnullLink().values().stream().collect(Collectors.toList());
+            }
+
+            LOG.info("deleting node in mounted nodes list");
+            InstanceIdentifier<Nodes> iiNodes = InstanceIdentifier.builder(MountedNodes.class)
+                .child(Nodes.class, new NodesKey(nodeId)).build();
+            this.networkTransactionService.delete(LogicalDatastoreType.CONFIGURATION, iiNodes);
+
             NodeKey nodeIdKey = new NodeKey(new NodeId(nodeId));
 
             LOG.info("deleting node in {}", NetworkUtils.UNDERLAY_NETWORK_ID);
@@ -214,18 +264,27 @@ public class NetworkModelServiceImpl implements NetworkModelService {
                 .build();
             this.networkTransactionService.delete(LogicalDatastoreType.CONFIGURATION, iiopenroadmNetworkNode);
 
-            TopologyShard topologyShard = this.topologyShardMountedDevice.get(nodeId);
-            if (topologyShard != null) {
-                for (Node openRoadmTopologyNode : topologyShard.getNodes()) {
-                    LOG.info("deleting node {} in {}", openRoadmTopologyNode.getNodeId().getValue(),
-                        NetworkUtils.OVERLAY_NETWORK_ID);
-                    InstanceIdentifier<Node> iiOpenRoadmTopologyNode = InstanceIdentifier.builder(Networks.class)
-                        .child(Network.class, new NetworkKey(new NetworkId(NetworkUtils.OVERLAY_NETWORK_ID)))
-                        .child(Node.class, openRoadmTopologyNode.key())
-                        .build();
-                    this.networkTransactionService.delete(LogicalDatastoreType.CONFIGURATION, iiOpenRoadmTopologyNode);
+            for (Node openRoadmTopologyNode : allNodes) {
+                for (SupportingNode snode : openRoadmTopologyNode.nonnullSupportingNode().values()) {
+                    if (NetworkUtils.UNDERLAY_NETWORK_ID.equals(snode.getNetworkRef().getValue())
+                        && nodeId.equals(snode.getNodeRef().getValue())) {
+                        LOG.info("deleting node {} in {}", openRoadmTopologyNode.getNodeId().getValue(),
+                            NetworkUtils.OVERLAY_NETWORK_ID);
+                        InstanceIdentifier<Node> iiOpenRoadmTopologyNode = InstanceIdentifier.builder(Networks.class)
+                            .child(Network.class, new NetworkKey(new NetworkId(NetworkUtils.OVERLAY_NETWORK_ID)))
+                            .child(Node.class, openRoadmTopologyNode.key())
+                            .build();
+                        this.networkTransactionService.delete(
+                            LogicalDatastoreType.CONFIGURATION, iiOpenRoadmTopologyNode);
+                    }
                 }
-                for (Link openRoadmTopologyLink : topologyShard.getLinks()) {
+            }
+
+            for (Link openRoadmTopologyLink : allLinks) {
+                String sourceNode = openRoadmTopologyLink.getSource().getSourceNode().getValue();
+                String destNode = openRoadmTopologyLink.getDestination().getDestNode().getValue();
+                if (nodeId.equals(sourceNode.substring(0, sourceNode.lastIndexOf("-")))
+                    || nodeId.equals(destNode.substring(0, destNode.lastIndexOf("-")))) {
                     LOG.info("deleting link {} in {}", openRoadmTopologyLink.getLinkId().getValue(),
                         NetworkUtils.OVERLAY_NETWORK_ID);
                     InstanceIdentifier<Link> iiOpenRoadmTopologyLink = InstanceIdentifier.builder(Networks.class)
@@ -235,9 +294,8 @@ public class NetworkModelServiceImpl implements NetworkModelService {
                         .build();
                     this.networkTransactionService.delete(LogicalDatastoreType.CONFIGURATION, iiOpenRoadmTopologyLink);
                 }
-            } else {
-                LOG.warn("TopologyShard for node '{}' is not present", nodeId);
             }
+
             @Nullable
             OpenroadmNodeVersion deviceVersion = this.portMapping.getNode(nodeId).getNodeInfo().getOpenroadmVersion();
             @Nullable
@@ -273,6 +331,7 @@ public class NetworkModelServiceImpl implements NetworkModelService {
 
             this.networkTransactionService.commit().get(1, TimeUnit.SECONDS);
             LOG.info("all nodes and links deleted ! ");
+            LOG.info("Device {} correctly disconnected from controller", nodeId);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             LOG.error("Error when trying to delete node : {}", nodeId, e);
             return false;

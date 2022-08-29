@@ -1,0 +1,25 @@
+module transportpce-createnode {
+  yang-version 1;
+  namespace "http://org/opendaylight/transportpce/createnode";
+  prefix org-opendaylight-transportpce-createnode;
+
+  revision 2022-10-06 {
+    description
+      "Initial revision of createnodes model";
+  }
+
+  rpc create-roadm-node {
+    description
+      "This rpc initiates roadm to roadm link";
+    input {
+      leaf node-id {
+        type string;
+      }
+    }
+    output {
+      leaf result {
+        type string;
+      }
+    }
+  }
+}

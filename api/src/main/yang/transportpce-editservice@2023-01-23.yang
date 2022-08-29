@@ -1,0 +1,46 @@
+module transportpce-editservice {
+  yang-version 1;
+  namespace "http://org/opendaylight/transportpce/editservice";
+  prefix org-opendaylight-transportpce-editservice;
+
+  revision 2023-01-23 {
+    description
+      "Initial revision of edit service model";
+  }
+
+  rpc rename-service {
+    description
+      "This rpc renames a service";
+    input {
+      leaf service-name {
+        type string;
+      }
+      leaf new-service-name {
+        type string;
+      }
+    }
+    output {
+      leaf result {
+        type string;
+      }
+    }
+  }
+
+  rpc change-request-id {
+    description
+      "This rpc changes the request-id of a service";
+    input {
+      leaf service-name {
+        type string;
+      }
+      leaf new-request-id {
+        type string;
+      }
+    }
+    output {
+      leaf result {
+        type string;
+      }
+    }
+  }
+}

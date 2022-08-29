@@ -11,20 +11,14 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 import org.opendaylight.mdsal.binding.api.NotificationPublishService;
 import org.opendaylight.transportpce.common.mapping.PortMapping;
 import org.opendaylight.transportpce.common.network.NetworkTransactionService;
 import org.opendaylight.transportpce.pce.PceComplianceCheck;
 import org.opendaylight.transportpce.pce.PceComplianceCheckResult;
 import org.opendaylight.transportpce.pce.PceSendingPceRPCs;
-import org.opendaylight.transportpce.pce.gnpy.GnpyResult;
-import org.opendaylight.transportpce.pce.gnpy.consumer.GnpyConsumer;
-import org.opendaylight.yang.gen.v1.gnpy.path.rev220615.result.Response;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.CancelResourceReserveInput;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.CancelResourceReserveOutput;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.CancelResourceReserveOutputBuilder;
@@ -33,13 +27,6 @@ import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev22
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.PathComputationRequestOutputBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.ServicePathRpcResult;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.ServicePathRpcResultBuilder;
-import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.gnpy.GnpyResponse;
-import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.gnpy.GnpyResponseBuilder;
-import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.gnpy.gnpy.response.response.type.NoPathCaseBuilder;
-import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.gnpy.gnpy.response.response.type.PathCaseBuilder;
-import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.path.performance.PathPropertiesBuilder;
-import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.path.performance.path.properties.PathMetric;
-import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.path.performance.path.properties.PathMetricBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.service.path.rpc.result.PathDescription;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.pce.rev220615.service.path.rpc.result.PathDescriptionBuilder;
 import org.opendaylight.yang.gen.v1.http.org.openroadm.common.service.types.rev211210.configuration.response.common.ConfigurationResponseCommonBuilder;
@@ -58,16 +45,14 @@ public class PathComputationServiceImpl implements PathComputationService {
     private NetworkTransactionService networkTransactionService;
     private final ListeningExecutorService executor;
     private ServicePathRpcResult notification = null;
-    private final GnpyConsumer gnpyConsumer;
     private PortMapping portMapping;
 
     public PathComputationServiceImpl(NetworkTransactionService networkTransactionService,
                                       NotificationPublishService notificationPublishService,
-                                      GnpyConsumer gnpyConsumer, PortMapping portMapping) {
+                                      PortMapping portMapping) {
         this.notificationPublishService = notificationPublishService;
         this.networkTransactionService = networkTransactionService;
         this.executor = MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(5));
-        this.gnpyConsumer = gnpyConsumer;
         this.portMapping = portMapping;
     }
 
@@ -118,7 +103,7 @@ public class PathComputationServiceImpl implements PathComputationService {
                         RpcStatusEx.Pending,
                         "Service compliant, submitting cancelResourceReserve Request ...",
                         null);
-                PceSendingPceRPCs sendingPCE = new PceSendingPceRPCs(gnpyConsumer);
+                PceSendingPceRPCs sendingPCE = new PceSendingPceRPCs();
                 sendingPCE.cancelResourceReserve();
                 LOG.info("in PathComputationServiceImpl : {}",
                         Boolean.TRUE.equals(sendingPCE.getSuccess())
@@ -179,28 +164,11 @@ public class PathComputationServiceImpl implements PathComputationService {
                     "Service compliant, submitting pathComputation Request ...",
                     null);
                 PceSendingPceRPCs sendingPCE =
-                    new PceSendingPceRPCs(input, networkTransactionService, gnpyConsumer, portMapping);
+                    new PceSendingPceRPCs(input, networkTransactionService, portMapping);
                 sendingPCE.pathComputation();
                 String message = sendingPCE.getMessage();
                 String responseCode = sendingPCE.getResponseCode();
                 LOG.info("PCE response: {} {}", message, responseCode);
-
-                //add the GNPy result
-                GnpyResult gnpyAtoZ = sendingPCE.getGnpyAtoZ();
-                GnpyResult gnpyZtoA = sendingPCE.getGnpyZtoA();
-                List<GnpyResponse> listResponse = new ArrayList<>();
-                if (gnpyAtoZ != null) {
-                    GnpyResponse respAtoZ = generateGnpyResponse(gnpyAtoZ.getResponse(),"A-to-Z");
-                    listResponse.add(respAtoZ);
-                }
-                if (gnpyZtoA != null) {
-                    GnpyResponse respZtoA = generateGnpyResponse(gnpyZtoA.getResponse(),"Z-to-A");
-                    listResponse.add(respZtoA);
-                }
-                output
-                    .setGnpyResponse(
-                        listResponse.stream()
-                            .collect(Collectors.toMap(GnpyResponse::key, gnpyResponse -> gnpyResponse)));
 
                 PathDescriptionBuilder path = sendingPCE.getPathDescription();
                 if (Boolean.FALSE.equals(sendingPCE.getSuccess()) || (path == null)) {
@@ -271,68 +239,4 @@ public class PathComputationServiceImpl implements PathComputationService {
             }
         });
     }
-
-    public GnpyResponse generateGnpyResponse(Response responseGnpy, String pathDir) {
-        if (responseGnpy == null) {
-            return new GnpyResponseBuilder()
-                .setPathDir(pathDir)
-                .setResponseType(null)
-                .setFeasibility(true)
-                .build();
-        }
-        if (responseGnpy.getResponseType()
-                instanceof org.opendaylight.yang.gen.v1.gnpy.path.rev220615.result.response.response.type.NoPathCase) {
-            LOG.info("GNPy : path is not feasible");
-            org.opendaylight.yang.gen.v1.gnpy.path.rev220615.result.response.response.type.NoPathCase
-                    noPathGnpy =
-                (org.opendaylight.yang.gen.v1.gnpy.path.rev220615.result.response.response.type.NoPathCase)
-                    responseGnpy.getResponseType();
-            return new GnpyResponseBuilder()
-                .setPathDir(pathDir)
-                .setResponseType(
-                    new NoPathCaseBuilder()
-                        .setNoPath(noPathGnpy.getNoPath())
-                        .build())
-                .setFeasibility(false)
-                .build();
-        }
-        if (responseGnpy.getResponseType()
-                instanceof org.opendaylight.yang.gen.v1.gnpy.path.rev220615.result.response.response.type.PathCase) {
-            LOG.info("GNPy : path is feasible");
-            org.opendaylight.yang.gen.v1.gnpy.path.rev220615.result.response.response.type.PathCase
-                    pathCase =
-                (org.opendaylight.yang.gen.v1.gnpy.path.rev220615.result.response.response.type.PathCase)
-                    responseGnpy.getResponseType();
-            List<org.opendaylight.yang.gen.v1.gnpy.path.rev220615.generic.path.properties.path.properties.PathMetric>
-                    pathMetricList =
-                new ArrayList<>(pathCase.getPathProperties().getPathMetric().values());
-            List<PathMetric> gnpyPathMetricList = new ArrayList<>();
-            for (org.opendaylight.yang.gen.v1.gnpy.path.rev220615.generic.path.properties.path.properties.PathMetric
-                    pathMetricGnpy : pathMetricList) {
-                gnpyPathMetricList.add(
-                    new PathMetricBuilder()
-                        .setMetricType(pathMetricGnpy.getMetricType())
-                        .setAccumulativeValue(pathMetricGnpy.getAccumulativeValue())
-                        .build());
-            }
-            return new GnpyResponseBuilder()
-                .setPathDir(pathDir)
-                .setResponseType(
-                    new PathCaseBuilder()
-                        .setPathProperties(
-                            new PathPropertiesBuilder()
-                                .setPathMetric(gnpyPathMetricList.stream()
-                                    .collect(Collectors.toMap(PathMetric::key, pathMetric -> pathMetric)))
-                                .build())
-                        .build())
-                .setFeasibility(true)
-                .build();
-        }
-        return new GnpyResponseBuilder()
-            .setPathDir(pathDir)
-            .setResponseType(null)
-            .setFeasibility(true)
-            .build();
-    }
-
 }

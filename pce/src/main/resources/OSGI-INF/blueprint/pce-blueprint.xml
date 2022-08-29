@@ -33,16 +33,7 @@ Author: Martial Coulibaly <martial.coulibaly@gfi.com> on behalf of Orange
         init-method="init" destroy-method="close">
     <argument ref="networkTransactionImpl"/>
     <argument ref="notificationPublishService" />
-    <argument ref="gnpyConsumer" />
     <argument ref="portMapping" />
-  </bean>
-
-  <bean id="gnpyConsumer"
-        class="org.opendaylight.transportpce.pce.gnpy.consumer.GnpyConsumerImpl">
-     <argument value="${url}"/>
-     <argument value="${username}"/>
-     <argument value="${password}"/>
-     <argument ref="bindingDOMCodecServices" />
   </bean>
 
   <bean id="provider"

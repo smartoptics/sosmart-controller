@@ -22,9 +22,6 @@ import org.opendaylight.mdsal.binding.dom.codec.spi.BindingDOMCodecServices;
 import org.opendaylight.transportpce.common.mapping.PortMapping;
 import org.opendaylight.transportpce.common.network.NetworkTransactionImpl;
 import org.opendaylight.transportpce.common.network.RequestProcessor;
-import org.opendaylight.transportpce.pce.gnpy.JerseyServer;
-import org.opendaylight.transportpce.pce.gnpy.consumer.GnpyConsumer;
-import org.opendaylight.transportpce.pce.gnpy.consumer.GnpyConsumerImpl;
 import org.opendaylight.transportpce.pce.utils.PceTestData;
 import org.opendaylight.transportpce.pce.utils.PceTestUtils;
 import org.opendaylight.transportpce.test.AbstractTest;
@@ -45,9 +42,7 @@ public class PceSendingPceRPCsTest extends AbstractTest {
     private Mapping mapping;
     @Mock
     private BindingDOMCodecServices bindingDOMCodecServices;
-    private JerseyServer jerseyServer = new JerseyServer();
     private DataBroker dataBroker;
-    private GnpyConsumer gnpyConsumer;
     @Mock
     private PortMapping portMapping;
 
@@ -57,10 +52,8 @@ public class PceSendingPceRPCsTest extends AbstractTest {
         this.dataBroker = getNewDataBroker();
         networkTransaction = new NetworkTransactionImpl(new RequestProcessor(this.dataBroker));
         PceTestUtils.writeNetworkInDataStore(this.dataBroker);
-        gnpyConsumer = new GnpyConsumerImpl("http://localhost:9998",
-                "mylogin", "mypassword", getDataStoreContextUtil().getBindingDOMCodecServices());
         pceSendingPceRPCs = new PceSendingPceRPCs(PceTestData.getPCE_test1_request_54(),
-                        networkTransaction, gnpyConsumer, portMapping);
+                        networkTransaction, portMapping);
         mapping = new MappingBuilder().setLogicalConnectionPoint("logicalConnectionPoint").setPortQual("xpdr-client")
             .build();
         NodeInfo info = new NodeInfoBuilder().setNodeType(NodeTypes.Xpdr).build();
@@ -77,14 +70,11 @@ public class PceSendingPceRPCsTest extends AbstractTest {
 
     @Test
     public void pathComputationTest() throws Exception {
-        jerseyServer.setUp();
         pceSendingPceRPCs =
                 new PceSendingPceRPCs(PceTestData.getGnpyPCERequest("XPONDER-1", "XPONDER-2"),
-                        networkTransaction, gnpyConsumer, portMapping);
+                        networkTransaction, portMapping);
         when(portMapping.getMapping(anyString(), anyString())).thenReturn(mapping);
         pceSendingPceRPCs.pathComputation();
-        Assert.assertTrue(gnpyConsumer.isAvailable());
-        jerseyServer.tearDown();
 
     }
 
@@ -97,16 +87,5 @@ public class PceSendingPceRPCsTest extends AbstractTest {
     public void responseCodeTest() {
         Assert.assertNull(pceSendingPceRPCs.getResponseCode());
     }
-
-    @Test
-    public void gnpyAtoZ() {
-        Assert.assertNull(pceSendingPceRPCs.getGnpyAtoZ());
-    }
-
-    @Test
-    public void getGnpyZtoA() {
-        Assert.assertNull(pceSendingPceRPCs.getGnpyZtoA());
-    }
-
 
 }

@@ -19,6 +19,7 @@ import org.opendaylight.transportpce.networkmodel.listeners.PortMappingListener;
 import org.opendaylight.transportpce.networkmodel.listeners.ServiceHandlerListener;
 import org.opendaylight.transportpce.networkmodel.service.FrequenciesService;
 import org.opendaylight.transportpce.networkmodel.util.TpceNetwork;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.createnode.rev221006.TransportpceCreatenodeService;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.networkutils.rev170818.TransportpceNetworkutilsService;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.Network;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.mapping.Mapping;
@@ -41,10 +42,12 @@ public class NetworkModelProvider {
     private final DataBroker dataBroker;
     private final RpcProviderService rpcProviderService;
     private final TransportpceNetworkutilsService networkutilsService;
+    private final TransportpceCreatenodeService createnodeService;
     private final NetConfTopologyListener topologyListener;
     private ListenerRegistration<NetConfTopologyListener> dataTreeChangeListenerRegistration;
     private ListenerRegistration<PortMappingListener> mappingListenerRegistration;
     private ObjectRegistration<TransportpceNetworkutilsService> networkutilsServiceRpcRegistration;
+    private ObjectRegistration<TransportpceCreatenodeService> createnodeServiceRpcRegistration;
     private TpceNetwork tpceNetwork;
     private ListenerRegistration<TransportpceServicehandlerListener> serviceHandlerListenerRegistration;
     private NotificationService notificationService;
@@ -53,11 +56,13 @@ public class NetworkModelProvider {
 
     public NetworkModelProvider(NetworkTransactionService networkTransactionService, final DataBroker dataBroker,
         final RpcProviderService rpcProviderService, final TransportpceNetworkutilsService networkutilsService,
+        final TransportpceCreatenodeService createnodeService,
         final NetConfTopologyListener topologyListener, NotificationService notificationService,
         FrequenciesService frequenciesService, PortMappingListener portMappingListener) {
         this.dataBroker = dataBroker;
         this.rpcProviderService = rpcProviderService;
         this.networkutilsService = networkutilsService;
+        this.createnodeService = createnodeService;
         this.topologyListener = topologyListener;
         this.tpceNetwork = new TpceNetwork(networkTransactionService);
         this.notificationService = notificationService;
@@ -81,6 +86,8 @@ public class NetworkModelProvider {
                 DataTreeIdentifier.create(LogicalDatastoreType.CONFIGURATION, MAPPING_II), portMappingListener);
         networkutilsServiceRpcRegistration =
             rpcProviderService.registerRpcImplementation(TransportpceNetworkutilsService.class, networkutilsService);
+        createnodeServiceRpcRegistration =
+            rpcProviderService.registerRpcImplementation(TransportpceCreatenodeService.class, createnodeService);
         TransportpceServicehandlerListener serviceHandlerListner =
                 new ServiceHandlerListener(frequenciesService);
         serviceHandlerListenerRegistration = notificationService.registerNotificationListener(serviceHandlerListner);
@@ -99,6 +106,9 @@ public class NetworkModelProvider {
         }
         if (networkutilsServiceRpcRegistration != null) {
             networkutilsServiceRpcRegistration.close();
+        }
+        if (createnodeServiceRpcRegistration != null) {
+            createnodeServiceRpcRegistration.close();
         }
         serviceHandlerListenerRegistration.close();
     }

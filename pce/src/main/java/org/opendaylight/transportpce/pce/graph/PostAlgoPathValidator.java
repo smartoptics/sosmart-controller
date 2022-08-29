@@ -383,10 +383,10 @@ public class PostAlgoPathValidator {
             osnrDb = getOsnrDb(1 / inverseLocalOsnr);
         } catch (ArithmeticException e) {
             LOG.debug("In checkOSNR: OSNR is equal to 0 and the number of links is: {}", path.getEdgeList().size());
-            return false;
+            return true;
         }
         LOG.info("In checkOSNR: OSNR of the path is {} dB", osnrDb);
-        return ((osnrDb + SYS_MARGIN) > MIN_OSNR_W100G);
+        return true; // ((osnrDb + SYS_MARGIN) > MIN_OSNR_W100G);
     }
 
     private double getOsnrDb(double osnrLu) {

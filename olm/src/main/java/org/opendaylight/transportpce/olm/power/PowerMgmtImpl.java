@@ -8,7 +8,7 @@
 
 package org.opendaylight.transportpce.olm.power;
 import java.math.BigDecimal;
-import java.math.MathContext;
+// import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Locale;
@@ -45,9 +45,9 @@ public class PowerMgmtImpl implements PowerMgmt {
     private static final String INTERFACE_NOT_PRESENT = "Interface {} on node {} is not present!";
     private static final double MC_WIDTH_GRAN = 2 * GridConstant.GRANULARITY;
 
-    private long timer1 = 120000;
+    private long timer1 = 35000;
     // openroadm spec value is 120000, functest value is 3000
-    private long timer2 = 20000;
+    private long timer2 = 10000;
     // openroadm spec value is 20000, functest value is 2000
 
     public PowerMgmtImpl(DataBroker db, OpenRoadmInterfaces openRoadmInterfaces,
@@ -68,14 +68,14 @@ public class PowerMgmtImpl implements PowerMgmt {
         try {
             this.timer1 = Long.parseLong(timer1);
         } catch (NumberFormatException e) {
-            this.timer1 = 120000;
+            this.timer1 = 35000;
             LOG.warn("Failed to retrieve Olm timer1 value from configuration - using default value {}",
                 this.timer1, e);
         }
         try {
             this.timer2 = Long.parseLong(timer2);
         } catch (NumberFormatException e) {
-            this.timer2 = 20000;
+            this.timer2 = 10000;
             LOG.warn("Failed to retrieve Olm timer2 value from configuration - using default value {}",
                 this.timer2, e);
         }
@@ -177,8 +177,8 @@ public class PowerMgmtImpl implements PowerMgmt {
 
                     LOG.info("Spanloss TX is {}", spanLossTx);
                     // TODO: The span-loss limits should be obtained from optical specifications
-                    if (spanLossTx == null || spanLossTx.intValue() <= 0 || spanLossTx.intValue() > 27) {
-                        LOG.error("Power Value is null: spanLossTx null or out of openROADM range ]0,27] {}",
+                    if (spanLossTx == null || spanLossTx.intValue() <= 0) {
+                        LOG.error("spanLossTx is null or negative {}",
                             spanLossTx);
                         return false;
                     }
@@ -192,7 +192,7 @@ public class PowerMgmtImpl implements PowerMgmt {
                             return false;
                         }
                         LOG.info("Roadm-connection: {} updated ", connectionNumber);
-                        Thread.sleep(timer2);
+                        Thread.sleep(timer1);
                         // TODO make this timer value configurable via OSGi blueprint
                         // although the value recommended by the white paper is 20 seconds.
                         // At least one vendor product needs 60 seconds
@@ -375,7 +375,9 @@ public class PowerMgmtImpl implements PowerMgmt {
         // TODO: These values will be obtained from the specifications
         // power-value here refers to the Pin[50GHz]
         BigDecimal powerValue;
-        if (spanLossTx.doubleValue()  >= 23.0) {
+        powerValue = spanLossTx.subtract(BigDecimal.valueOf(18.8));
+        powerValue = powerValue.min(BigDecimal.valueOf(3.2));
+        /* if (spanLossTx.doubleValue()  >= 23.0) {
             powerValue = BigDecimal.valueOf(2.0);
         } else if (spanLossTx.doubleValue()  >= 8.0) {
             powerValue = BigDecimal.valueOf(- (8.0 - spanLossTx.doubleValue()) / 3.0 - 3.0);
@@ -402,12 +404,13 @@ public class PowerMgmtImpl implements PowerMgmt {
             double pdsVal = 10 * Math.log10(logVal.doubleValue());
             // Addition of PSD value will give Pin[87.5 GHz]
             powerValue = powerValue.add(new BigDecimal(pdsVal, new MathContext(3, RoundingMode.HALF_EVEN)));
-        }
+        } */
         // FIXME compliancy with OpenROADM MSA and approximations used -- should be addressed with powermask update
         // cf JIRA ticket https://jira.opendaylight.org/browse/TRNSPRTPCE-494
         powerValue = powerValue.setScale(2, RoundingMode.CEILING);
         // target-output-power yang precision is 2, so we limit here to 2
-        LOG.info("The power value is P1[{}GHz]={} dB for spanloss {}", mcWidth, powerValue, spanLossTx);
+        // LOG.info("The power value is P1[{}GHz]={} dB for spanloss {}", mcWidth, powerValue, spanLossTx);
+        LOG.info("The power value is P1={} dB for spanloss {}", powerValue, spanLossTx);
         return powerValue;
     }
 
@@ -438,6 +441,7 @@ public class PowerMgmtImpl implements PowerMgmt {
         String spectralSlotName = String.join(GridConstant.SPECTRAL_SLOT_SEPARATOR,
                 input.getLowerSpectralSlotNumber().toString(),
                 input.getHigherSpectralSlotNumber().toString());
+        Boolean success = true;
         for (int i = input.getNodes().size() - 1; i >= 0; i--) {
             String nodeId = input.getNodes().get(i).getNodeId();
             String destTpId = input.getNodes().get(i).getDestTp();
@@ -448,12 +452,13 @@ public class PowerMgmtImpl implements PowerMgmt {
                     if (!crossConnect.setPowerLevel(nodeId, OpticalControlMode.Power.getName(),
                             Decimal64.valueOf("-60"), connectionNumber)) {
                         LOG.warn("Power down failed for Roadm-connection: {}", connectionNumber);
-                        return false;
+                        success = false;
+                        continue;
                     }
                     Thread.sleep(timer2);
                     if (!crossConnect.setPowerLevel(nodeId, OpticalControlMode.Off.getName(), null, connectionNumber)) {
                         LOG.warn("Setting power-control mode off failed for Roadm-connection: {}", connectionNumber);
-                        return false;
+                        success = false;
                     }
                 } else if (destTpId.toUpperCase(Locale.getDefault()).contains("SRG")) {
                     if (!crossConnect.setPowerLevel(nodeId, OpticalControlMode.Off.getName(), null, connectionNumber)) {
@@ -464,10 +469,10 @@ public class PowerMgmtImpl implements PowerMgmt {
             } catch (InterruptedException e) {
                 // TODO Auto-generated catch block
                 LOG.error("Olm-powerTurnDown wait failed: ",e);
-                return false;
+                success = false;
             }
         }
-        return true;
+        return success;
     }
 
     /**

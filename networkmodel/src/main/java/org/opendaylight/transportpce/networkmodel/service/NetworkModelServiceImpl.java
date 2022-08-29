@@ -105,14 +105,22 @@ public class NetworkModelServiceImpl implements NetworkModelService {
 
     @Override
     public void createOpenRoadmNode(String nodeId, String openRoadmVersion) {
+        createOpenRoadmNode(nodeId, openRoadmVersion, true);
+    }
+
+    @Override
+    public void createOpenRoadmNode(String nodeId, String openRoadmVersion, boolean reconnect) {
         try {
             LOG.info("createOpenROADMNode: {} ", nodeId);
 
             boolean firstMount;
             if (portMapping.getNode(nodeId) == null) {
                 firstMount = true;
+            } else if (reconnect) {
+                LOG.info("{} already exists in portmapping but was reconnected, skipping node creation", nodeId);
+                return;
             } else {
-                LOG.info("{} already exists in portmapping but was reconnected", nodeId);
+                LOG.info("{} already exists in portmapping but update requested", nodeId);
                 firstMount = false;
             }
 

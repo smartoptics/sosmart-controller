@@ -29,6 +29,8 @@ public interface NetworkModelService {
      */
     void createOpenRoadmNode(String nodeId, String nodeVersion);
 
+    void createOpenRoadmNode(String nodeId, String nodeVersion, boolean reconnect);
+
     /**
      * Delete OpenROADM node from portmapping and topologies.
      *

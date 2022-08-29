@@ -16,8 +16,8 @@ public final class Timeouts {
     public static final long DATASTORE_DELETE = 1000;
 
     // TODO remove '* 2' when renderer and olm is running in parallel
-    public static final long RENDERING_TIMEOUT = 240000 * 2;
-    public static final long OLM_TIMEOUT = 240000 * 2;
+    public static final long RENDERING_TIMEOUT = 330000 * 2;
+    public static final long OLM_TIMEOUT = 330000 * 2;
 
     public static final long SERVICE_ACTIVATION_TEST_RETRY_TIME = 20000;
 

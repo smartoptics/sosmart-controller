@@ -44,7 +44,7 @@ public class PceServiceRPCImplTest extends AbstractTest {
         notificationPublishService = new NotificationPublishServiceMock();
         networkTransaction =  new NetworkTransactionImpl(new RequestProcessor(getDataBroker()));
         pathComputationService = new PathComputationServiceImpl(networkTransaction, notificationPublishService,
-                null, portMapping);
+                portMapping);
         pceServiceRPC = new PceServiceRPCImpl(pathComputationService);
 
     }

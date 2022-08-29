@@ -30,6 +30,13 @@ import org.opendaylight.mdsal.common.api.LogicalDatastoreType;
 import org.opendaylight.transportpce.common.StringConstants;
 import org.opendaylight.transportpce.common.Timeouts;
 import org.opendaylight.transportpce.common.device.DeviceTransactionManager;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.Geonetwork;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.GeonetworkBuilder;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.geonetwork.Geonodes;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.geonetwork.GeonodesBuilder;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.geonetwork.GeonodesKey;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.geonetwork.geonodes.GeoLocation;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.geonetwork.geonodes.GeoLocationBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.Network;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.NetworkBuilder;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.OpenroadmNodeVersion;
@@ -143,6 +150,10 @@ public class PortMappingVersion221 {
             return false;
         }
         postPortMapping(nodeId, nodeInfo, null, null, null, null);
+        GeoLocation geoLocation = createGeoLocation(deviceInfo);
+        if (geoLocation != null) {
+            postGeoLocation(nodeId, geoLocation);
+        }
 
         switch (deviceInfo.getNodeType()) {
 
@@ -732,6 +743,30 @@ public class PortMappingVersion221 {
         }
     }
 
+    private boolean postGeoLocation(String nodeId, GeoLocation geoLocation) {
+        GeonodesBuilder geonodesBldr = new GeonodesBuilder().withKey(new GeonodesKey(nodeId)).setNodeId(nodeId);
+        if (geoLocation != null) {
+            geonodesBldr.setGeoLocation(geoLocation);
+        }
+        Map<GeonodesKey,Geonodes> geonodesList = new HashMap<>();
+        Geonodes geonodes = geonodesBldr.build();
+        geonodesList.put(geonodes.key(),geonodes);
+
+        Geonetwork network = new GeonetworkBuilder().setGeonodes(geonodesList).build();
+        final WriteTransaction writeTransaction = dataBroker.newWriteOnlyTransaction();
+        InstanceIdentifier<Geonetwork> nodesIID = InstanceIdentifier.builder(Geonetwork.class).build();
+        writeTransaction.merge(LogicalDatastoreType.CONFIGURATION, nodesIID, network);
+        FluentFuture<? extends @NonNull CommitInfo> commit = writeTransaction.commit();
+        try {
+            commit.get();
+            return true;
+
+        } catch (InterruptedException | ExecutionException e) {
+            LOG.warn("Failed to post {}", network, e);
+            return false;
+        }
+    }
+
     private CpToDegree createCpToDegreeObject(String circuitPackName, String degreeNumber,
             Map<String, String> interfaceList) {
         return new CpToDegreeBuilder()
@@ -1223,6 +1258,17 @@ public class PortMappingVersion221 {
             nodeInfoBldr.setNodeIpAddress(deviceInfo.getIpAddress());
         }
         return nodeInfoBldr.build();
+    }
+
+    private GeoLocation createGeoLocation(Info deviceInfo) {
+        if (deviceInfo.getGeoLocation() == null) {
+            LOG.error("Geolocation missing for node {}", deviceInfo.getNodeId());
+            return null;
+        }
+        GeoLocationBuilder geoLocationBldr = new GeoLocationBuilder()
+                .setLatitude(deviceInfo.getGeoLocation().getLatitude())
+                .setLongitude(deviceInfo.getGeoLocation().getLongitude());
+        return geoLocationBldr.build();
     }
 
     private Optional<Interface> getInterfaceFromDevice(String nodeId, String interfaceName) {

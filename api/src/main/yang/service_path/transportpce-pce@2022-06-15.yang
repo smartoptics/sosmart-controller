@@ -14,9 +14,6 @@ module transportpce-pce {
   import transportpce-pathDescription {
     prefix transportpce-pathDescription;
   }
-  import gnpy-path-computation-simplified {
-    prefix gnpypc;
-  }
 
   organization
     "transportPCE";
@@ -95,63 +92,6 @@ module transportpce-pce {
     uses transportpce-pathDescription:path-description;
   }
 
-  grouping gnpy {
-    list gnpy-response {
-      key "path-dir";
-      config false;
-      description
-        "GNPy response";
-      leaf path-dir {
-        type string;
-        description
-          "A-to-Z or Z-to-A";
-      }
-      leaf feasibility {
-        type boolean;
-        description
-          "true : feasible path / False : non-feasible.";
-      }
-      choice response-type {
-        config false;
-        description
-          "response-type";
-        case no-path-case {
-          uses gnpypc:no-path-info;
-        }
-        case path-case {
-          description
-            "Path computation service.";
-          uses path-performance;
-        }
-      }
-    }
-  }
-
-  grouping path-performance {
-    description
-      "TE generic path properties grouping";
-    container path-properties {
-      config false;
-      description
-        "The TE path properties";
-      list path-metric {
-        key "metric-type";
-        description
-          "TE path metric type";
-        leaf metric-type {
-          type identityref {
-            base gnpypc:path-metric-type;
-          }
-        }
-        leaf accumulative-value {
-          type decimal64 {
-            fraction-digits 6;
-          }
-        }
-      }
-    }
-  }
-
   rpc path-computation-request {
     input {
       leaf service-name {
@@ -185,7 +125,6 @@ module transportpce-pce {
     output {
       uses org-openroadm-common-service-types:configuration-response-common;
       uses transportpce-common-service-path-types:response-parameters-sp;
-      uses gnpy;
     }
   }
 

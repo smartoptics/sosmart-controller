@@ -55,9 +55,20 @@ public class CrossConnectImpl221 {
     private static final String DEV_TRANSACTION_NOT_FOUND = "Device transaction for device {} was not found!";
     private static final String UNABLE_DEV_TRANSACTION = "Unable to obtain device transaction for device {}!";
     private final DeviceTransactionManager deviceTransactionManager;
+    private boolean recreateServices = false;
 
     public CrossConnectImpl221(DeviceTransactionManager deviceTransactionManager) {
         this.deviceTransactionManager = deviceTransactionManager;
+    }
+
+    public CrossConnectImpl221(DeviceTransactionManager deviceTransactionManager, String recreateServices) {
+        this.deviceTransactionManager = deviceTransactionManager;
+        this.recreateServices = Boolean.parseBoolean(recreateServices);
+        if (this.recreateServices) {
+            LOG.warn("Initializing CrossConnectImpl in recreate services mode");
+        } else {
+            LOG.info("Initializing CrossConnectImpl in normal mode");
+        }
     }
 
     public Optional<RoadmConnections> getCrossConnect(String deviceId, String connectionNumber) {
@@ -78,9 +89,17 @@ public class CrossConnectImpl221 {
     public Optional<String> postCrossConnect(String deviceId, String srcTp, String destTp,
                                              SpectrumInformation spectrumInformation) {
         String connectionNumber = spectrumInformation.getIdentifierFromParams(srcTp, destTp);
+        OpticalControlMode opticalControlMode;
+        if (this.recreateServices) {
+            opticalControlMode = OpticalControlMode.GainLoss;
+            LOG.warn("Recreating service with optical control mode gainloss");
+        } else {
+            opticalControlMode = OpticalControlMode.Off;
+            LOG.info("Normal service create with control mode off");
+        }
         RoadmConnectionsBuilder rdmConnBldr = new RoadmConnectionsBuilder()
                 .setConnectionName(connectionNumber)
-                .setOpticalControlMode(OpticalControlMode.Off)
+                .setOpticalControlMode(opticalControlMode)
                 .setSource(new SourceBuilder()
                         .setSrcIf(spectrumInformation.getIdentifierFromParams(srcTp,"nmc"))
                         .build())

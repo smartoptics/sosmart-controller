@@ -94,6 +94,7 @@ public final class OpenRoadmTopology {
     public static TopologyShard createTopologyShard(Nodes mappingNode, boolean firstMount) {
         switch (mappingNode.getNodeInfo().getNodeType()) {
             case Rdm :
+            case Ila:
                 return createRdmTopologyShard(mappingNode, firstMount);
             case Xpdr :
                 return createXpdrTopologyShard(mappingNode);

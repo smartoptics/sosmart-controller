@@ -23,6 +23,7 @@ import org.opendaylight.transportpce.servicehandler.listeners.RendererListenerIm
 import org.opendaylight.transportpce.servicehandler.listeners.ServiceListener;
 import org.opendaylight.transportpce.servicehandler.service.ServiceDataStoreOperations;
 import org.opendaylight.transportpce.test.AbstractTest;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.editservice.rev230123.TransportpceEditserviceService;
 
 public class ServicehandlerProviderTest  extends AbstractTest {
 
@@ -47,6 +48,9 @@ public class ServicehandlerProviderTest  extends AbstractTest {
     @Mock
     ServicehandlerImpl servicehandler;
 
+    @Mock
+    TransportpceEditserviceService editserviceService;
+
 
     private AutoCloseable closeable;
 
@@ -60,7 +64,7 @@ public class ServicehandlerProviderTest  extends AbstractTest {
         ServicehandlerProvider provider =  new ServicehandlerProvider(
                 getDataBroker(), rpcProviderRegistry,
                 getNotificationService() , serviceDataStoreOperations, pceListenerImpl, serviceListener,
-                rendererListenerImpl, networkModelListenerImpl, servicehandler);
+                rendererListenerImpl, networkModelListenerImpl, servicehandler, editserviceService);
 
         provider.init();
 

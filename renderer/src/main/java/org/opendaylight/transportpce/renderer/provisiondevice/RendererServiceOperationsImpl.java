@@ -710,12 +710,6 @@ public class RendererServiceOperationsImpl implements RendererServiceOperations 
                     olmPowerTurndown(servicePathInputDataAtoZ)
                         .getResult())) {
                 LOG.error("Service power turndown failed on A-to-Z path for service {}!", serviceName);
-                sendNotifications(
-                    ServicePathNotificationTypes.ServiceDelete,
-                    serviceName,
-                    RpcStatusEx.Failed,
-                    "Service power turndown failed on A-to-Z path for service");
-                return false;
             }
             LOG.debug("Turning down power on Z-to-A path");
             sendNotifications(
@@ -728,12 +722,6 @@ public class RendererServiceOperationsImpl implements RendererServiceOperations 
                     olmPowerTurndown(servicePathInputDataZtoA)
                         .getResult())) {
                 LOG.error("Service power turndown failed on Z-to-A path for service {}!", serviceName);
-                sendNotifications(
-                    ServicePathNotificationTypes.ServiceDelete,
-                    serviceName,
-                    RpcStatusEx.Failed,
-                    "Service power turndown failed on Z-to-A path for service");
-                return false;
             }
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             LOG.error("Error while turning down power!", e);

@@ -677,6 +677,9 @@ public final class ConnectivityUtils {
     private Map<ConnectionKey, Connection> createXpdrCepsAndConnectionsPht(List<String> xpdrNetworkTplist,
                                                                            List<String> xpdrNodelist) {
         Map<ConnectionKey, Connection> connServMap = new HashMap<>();
+        if (xpdrNodelist.isEmpty()) {
+            return connServMap;
+        }
         Map<org.opendaylight.yang.gen.v1.urn.onf.otcc.yang.tapi.connectivity.rev181210.cep.list.ConnectionEndPointKey,
             ConnectionEndPoint> cepMap = new HashMap<>();
         // TODO: when upgrading the models to 2.1.3, get the connection inclusion because those connections will
@@ -1365,8 +1368,7 @@ public final class ConnectivityUtils {
     }
 
     private String getIdBasedOnModelVersion(String nodeid) {
-        return nodeid.matches("[A-Z]{5}-[A-Z0-9]{2}-.*") ? String.join("-", nodeid.split("-")[0],
-            nodeid.split("-")[1]) : nodeid.split("-")[0];
+        return nodeid.substring(0, nodeid.lastIndexOf("-"));
     }
 
     public ServiceCreateInput createORServiceInput(CreateConnectivityServiceInput input, Uuid serviceUuid) {

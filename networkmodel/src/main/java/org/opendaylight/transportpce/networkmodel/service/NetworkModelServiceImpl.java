@@ -104,21 +104,29 @@ public class NetworkModelServiceImpl implements NetworkModelService {
     }
 
     @Override
-    public void createOpenRoadmNode(String nodeId, String openRoadmVersion) {
+    public boolean createOpenRoadmNode(String nodeId, String openRoadmVersion) {
+        return createOpenRoadmNode(nodeId, openRoadmVersion, true);
+    }
+
+    @Override
+    public boolean createOpenRoadmNode(String nodeId, String openRoadmVersion, boolean reconnect) {
         try {
             LOG.info("createOpenROADMNode: {} ", nodeId);
 
             boolean firstMount;
             if (portMapping.getNode(nodeId) == null) {
                 firstMount = true;
+            } else if (reconnect) {
+                LOG.info("{} already exists in portmapping but was reconnected, skipping node creation", nodeId);
+                return true;
             } else {
-                LOG.info("{} already exists in portmapping but was reconnected", nodeId);
+                LOG.info("{} already exists in portmapping but update requested", nodeId);
                 firstMount = false;
             }
 
             if (!portMapping.createMappingData(nodeId, openRoadmVersion)) {
                 LOG.warn("Could not generate port mapping for {} skipping network model creation", nodeId);
-                return;
+                return false;
             }
             NodeInfo nodeInfo = portMapping.getNode(nodeId).getNodeInfo();
             // node creation in clli-network
@@ -175,13 +183,15 @@ public class NetworkModelServiceImpl implements NetworkModelService {
             }
             networkTransactionService.commit().get();
             // neighbour links through LLDP
-            if (nodeInfo.getNodeType().getIntValue() == 1) {
+            if (nodeInfo.getNodeType().getIntValue() == 1 || nodeInfo.getNodeType().getIntValue() == 3) {
                 this.linkDiscovery.readLLDP(new NodeId(nodeId), openRoadmVersion);
             }
             LOG.info("all nodes and links created");
         } catch (InterruptedException | ExecutionException e) {
             LOG.error("ERROR: ", e);
+            return false;
         }
+        return true;
     }
 
     @Override

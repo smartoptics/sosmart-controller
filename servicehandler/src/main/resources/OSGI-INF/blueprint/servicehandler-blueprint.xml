@@ -36,6 +36,11 @@ Author: Martial Coulibaly <martial.coulibaly@gfi.com> on behalf of Orange
         <argument ref="dataBroker"/>
       </bean>
 
+    <bean id="editserviceServiceImpl" class="org.opendaylight.transportpce.servicehandler.service.EditServiceImpl">
+        <argument ref="serviceDatastoreOperation" />
+        <argument ref="dataBroker"/>
+    </bean>
+
     <bean id="pceListener" class="org.opendaylight.transportpce.servicehandler.listeners.PceListenerImpl">
         <argument ref="rendererServiceOperations" />
         <argument ref="pathComputationService" />
@@ -83,6 +88,7 @@ Author: Martial Coulibaly <martial.coulibaly@gfi.com> on behalf of Orange
         <argument ref="rendererListener" />
         <argument ref="networkModelListener" />
         <argument ref="serviceHandlerImpl" />
+        <argument ref="editserviceServiceImpl" />
     </bean>
 
     <service ref="serviceHandlerImpl"

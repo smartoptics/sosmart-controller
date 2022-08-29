@@ -52,6 +52,7 @@ public final class OpenRoadmNetwork {
          */
         switch (nodeInfo.getNodeType().getIntValue()) {
             case 1:
+            case 3:
                 node2Bldr.setNodeType(OpenroadmNodeType.ROADM);
                 break;
             case 2:

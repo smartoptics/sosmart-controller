@@ -130,6 +130,10 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
         ForkJoinTask forkJoinTask = forkJoinPool.submit(() -> nodes.parallelStream().forEach(node -> {
             String nodeId = node.getNodeId();
             LOG.info("Starting provisioning for node : {}", nodeId);
+            if (this.portMapping.getNode(nodeId).getNodeInfo().getNodeType().getIntValue() == 3) {
+                LOG.info("Node is ILA, nothing to do");
+                return;
+            }
             AEndApiInfo apiInfoA = null;
             ZEndApiInfo apiInfoZ = null;
             if (input.getAEndApiInfo() != null && input.getAEndApiInfo().getNodeId().contains(nodeId)) {
@@ -312,6 +316,10 @@ public class DeviceRendererServiceImpl implements DeviceRendererService {
         ForkJoinTask forkJoinTask = forkJoinPool.submit(() -> nodes.parallelStream().forEach(node -> {
             String nodeId = node.getNodeId();
             LOG.info("Deleting service setup on node {}", nodeId);
+            if (this.portMapping.getNode(nodeId).getNodeInfo().getNodeType().getIntValue() == 3) {
+                LOG.info("Node is ILA, nothing to do");
+                return;
+            }
             if (node.getDestTp() == null) {
                 LOG.error("Destination termination point must not be null.");
                 return;

@@ -21,6 +21,14 @@ import org.opendaylight.mdsal.binding.api.DataBroker;
 import org.opendaylight.mdsal.binding.api.ReadTransaction;
 import org.opendaylight.mdsal.binding.api.WriteTransaction;
 import org.opendaylight.mdsal.common.api.LogicalDatastoreType;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.Geonetwork;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.geonetwork.Geonodes;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.geolocation.rev210701.geonetwork.GeonodesKey;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.nodeidmapping.rev230202.NodeIdMapping;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.nodeidmapping.rev230202.node.id.mapping.NodeIds;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.nodeidmapping.rev230202.node.id.mapping.NodeIdsKey;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.nodeidmapping.rev230202.node.id.mapping.ReverseNodeIds;
+import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.nodeidmapping.rev230202.node.id.mapping.ReverseNodeIdsKey;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.Network;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.OpenroadmNodeVersion;
 import org.opendaylight.yang.gen.v1.http.org.opendaylight.transportpce.portmapping.rev220316.mapping.Mapping;
@@ -179,6 +187,35 @@ public class PortMappingImpl implements PortMapping {
             LOG.info("Port mapping removal for node '{}'", nodeId);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             LOG.error("Error for removing port mapping infos for node '{}'", nodeId, e);
+        }
+        WriteTransaction rwGeolocation = this.dataBroker.newWriteOnlyTransaction();
+        InstanceIdentifier<Geonodes> geoNodesIID = InstanceIdentifier.create(Geonetwork.class)
+            .child(Geonodes.class, new GeonodesKey(nodeId));
+        rwGeolocation.delete(LogicalDatastoreType.CONFIGURATION, geoNodesIID);
+        try {
+            rwGeolocation.commit().get(1, TimeUnit.SECONDS);
+            LOG.info("Geolocation removal for node '{}'", nodeId);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            LOG.error("Error for removing geolocation for node '{}'", nodeId, e);
+        }
+        InstanceIdentifier<ReverseNodeIds> reverseNodeIdsIID = InstanceIdentifier.builder(NodeIdMapping.class)
+            .child(ReverseNodeIds.class, new ReverseNodeIdsKey(nodeId)).build();
+        try (ReadTransaction readTx = this.dataBroker.newReadOnlyTransaction()) {
+            Optional<ReverseNodeIds> reverseNodeIdsObject = readTx.read(
+                LogicalDatastoreType.CONFIGURATION, reverseNodeIdsIID).get();
+            if (reverseNodeIdsObject.isPresent()) {
+                InstanceIdentifier<NodeIds> nodeIdsIID = InstanceIdentifier.builder(NodeIdMapping.class)
+                    .child(NodeIds.class, new NodeIdsKey(reverseNodeIdsObject.get().getDeviceNodeId())).build();
+                WriteTransaction rwNodeIds = this.dataBroker.newWriteOnlyTransaction();
+                rwNodeIds.delete(LogicalDatastoreType.CONFIGURATION, nodeIdsIID);
+                rwNodeIds.commit().get(1, TimeUnit.SECONDS);
+                WriteTransaction rwReverseNodeIds = this.dataBroker.newWriteOnlyTransaction();
+                rwReverseNodeIds.delete(LogicalDatastoreType.CONFIGURATION, reverseNodeIdsIID);
+                rwReverseNodeIds.commit().get(1, TimeUnit.SECONDS);
+                LOG.info("node-id-mapping removal for node '{}'", nodeId);
+            }
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            LOG.error("Failed getting node-id-mapping", e);
         }
     }
 
